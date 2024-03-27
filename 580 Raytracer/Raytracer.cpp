@@ -46,4 +46,41 @@ bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo hit
 	if (NearlyEquals(planeNormalDotRayDir, 0)) {
 		return false;
 	}
+
+	//Ax + By + Cz + D = 0 for plane, where A B C is the normal to plane N = (A, B, C), x y z is any point on the plane
+	//We can use any vertex x y z to substitute 
+	float D = -(planeNormal.x * triangle.v0.vertexPos.x + planeNormal.y * triangle.v0.vertexPos.y + planeNormal.z * triangle.v0.vertexPos.z);
+
+	//Since P is a point on the plane, we can substitute it into Ax + By + Cz + D = 0, and we already know D from above
+	//We can calculate t, which is the distance from ray origin to intersection point
+	float t = -(Vector3::dot(planeNormal, ray.origin) + D) / Vector3::dot(planeNormal, ray.direction);
+
+	if (t < 0) {
+		//The plane is behind the ray, thus no intersection
+		return false;
+	}
+	//P = RayOrigin + t * RayDirection -> point on plane
+	Vector3 pointOnPlane = ray.origin + t * ray.direction;
+
+	//We now can use barycentric to see if this point is inside the triangle or not
+	//For all three edges, if dot(vector from first vertex of the edge to p, edge) > 0, then it means that the point is left of the edge
+	//When point is left of all three edges, the point is inside the triangle
+
+	//However, the orientation of the triangle could mess up the calculation is specified wrong
+	//For practical purpose, we can add a step to compute cross product of edge with the point vector
+	//And use the directional information to know if it's left or right
+	Vector3 edge0 = triangle.v1.vertexPos - triangle.v0.vertexPos;
+	Vector3 edge1 = triangle.v2.vertexPos - triangle.v1.vertexPos;
+	Vector3 edge2 = triangle.v0.vertexPos - triangle.v2.vertexPos;
+
+	Vector3 c0 = pointOnPlane - triangle.v0.vertexPos;
+	Vector3 c1 = pointOnPlane - triangle.v1.vertexPos;
+	Vector3 c2 = pointOnPlane - triangle.v2.vertexPos;
+
+	hitInfo.hitPoint = pointOnPlane;
+	hitInfo.normal = planeNormal;
+	return Vector3::dot(planeNormal, Vector3::cross(edge0, c0)) > 0 &&
+		Vector3::dot(planeNormal, Vector3::cross(edge1, c1)) > 0 &&
+		Vector3::dot(planeNormal, Vector3::cross(edge2, c2)) > 0;
 }
+

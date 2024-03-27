@@ -1,6 +1,11 @@
 #pragma once
 #include <cmath>
 #include <vector>
+
+//Defines
+#define RT_SUCCESS      0
+#define RT_FAILURE      1
+
 struct Matrix;
 struct Vector3;
 
@@ -50,8 +55,8 @@ public:
 	//Perspective & Camera
 	struct Camera
 	{
-		NtMatrix        viewMatrix;		/* world to image space */
-		NtMatrix        projectMatrix;  /* perspective projection */
+		Matrix        viewMatrix;		/* world to image space */
+		Matrix        projectMatrix;  /* perspective projection */
 		Vector3 viewDirection;
 		Vector3 from;
 		Vector3 to;
@@ -68,10 +73,10 @@ public:
 
 	//Helper ray cast functions
 	//Möller–Trumbore intersection algorithm
-	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo hitInfo);
+	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix);
 
-	private:
-		const float EPSILON = 0.00001f;
+private:
+	const float EPSILON = 0.00001f;
 };
 
 struct Vector3 {
@@ -166,7 +171,7 @@ struct Vector2 {
 	Vector2(const float values[2]) : x(values[0]), y(values[1]) {}
 };
 
-typedef struct Matrix {
+struct Matrix {
 	float m[4][4];
 
 	// Overload the subscript operator to allow direct access to internal array
@@ -219,4 +224,90 @@ typedef struct Matrix {
 		}
 		return result;
 	}
-} NtMatrix;
+
+	Vector3 TransformPoint(const Vector3& point) const {
+		float x = m[0][0] * point.x + m[0][1] * point.y + m[0][2] * point.z + m[0][3];
+		float y = m[1][0] * point.x + m[1][1] * point.y + m[1][2] * point.z + m[1][3];
+		float z = m[2][0] * point.x + m[2][1] * point.y + m[2][2] * point.z + m[2][3];
+		return Vector3(x, y, z);
+	}
+
+	//Inverse
+	static float Determinant3x3(const Matrix& matrix) {
+		return matrix.m[0][0] * (matrix.m[1][1] * matrix.m[2][2] - matrix.m[1][2] * matrix.m[2][1]) -
+			matrix.m[0][1] * (matrix.m[1][0] * matrix.m[2][2] - matrix.m[1][2] * matrix.m[2][0]) +
+			matrix.m[0][2] * (matrix.m[1][0] * matrix.m[2][1] - matrix.m[1][1] * matrix.m[2][0]);
+	}
+
+	static float Determinant(const Matrix& matrix) {
+		float det = 0;
+		for (int i = 0; i < 4; i++) {
+			Matrix submatrix;
+			for (int j = 1; j < 4; j++) {
+				for (int k = 0; k < 4; k++) {
+					if (k < i) {
+						submatrix.m[j - 1][k] = matrix.m[j][k];
+					}
+					else if (k > i) {
+						submatrix.m[j - 1][k - 1] = matrix.m[j][k];
+					}
+				}
+			}
+			det += (i % 2 == 0 ? 1 : -1) * matrix.m[0][i] * Determinant3x3(submatrix);
+		}
+		return det;
+	}
+
+	static void Adjoint(const Matrix& matrix, Matrix& adjoint) {
+		for (int i = 0; i < 4; i++) {
+			for (int j = 0; j < 4; j++) {
+				Matrix submatrix;
+				int subi = 0;
+				for (int k = 0; k < 4; k++) {
+					if (k == i) continue;
+					int subj = 0;
+					for (int l = 0; l < 4; l++) {
+						if (l == j) continue;
+						submatrix.m[subi][subj] = matrix.m[k][l];
+						subj++;
+					}
+					subi++;
+				}
+				float cofactor = Determinant3x3(submatrix);
+				if ((i + j) % 2 != 0) cofactor = -cofactor;
+				adjoint.m[j][i] = cofactor;  // Transpose the cofactor matrix
+			}
+		}
+	}
+
+	static int InverseAndTranspose(const Matrix& matrix, Matrix& result) {
+		float det = Determinant(matrix);
+		if (fabs(det) < 1e-10) {
+			return RT_FAILURE;
+		}
+
+		Matrix adjoint;
+		Adjoint(matrix, adjoint);
+		Matrix invMatrix;
+		for (int i = 0; i < 4; i++) {
+			for (int j = 0; j < 4; j++) {
+				invMatrix.m[i][j] = adjoint.m[i][j] / det;
+			}
+		}
+
+		for (int i = 0; i < 3; i++) {
+			for (int j = 0; j < 3; j++) {
+				result.m[i][j] = invMatrix.m[j][i];
+			}
+		}
+
+		// Ensure the rest of the matrix (the translation part) is also copied/transformed
+		for (int i = 0; i < 4; i++) {
+			result.m[3][i] = invMatrix.m[3][i]; // Copy the translation row
+			result.m[i][3] = invMatrix.m[i][3]; // Copy the translation column
+		}
+		result.m[3][3] = 1.0f; // Set the homogeneous coordinate to 1
+
+		return RT_SUCCESS;
+	}
+};

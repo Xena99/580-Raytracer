@@ -1,5 +1,5 @@
 #include "Raytracer.h"
-
+#include <iostream>
 /// <summary>
 /// For float comparison
 /// </summary>
@@ -23,20 +23,21 @@ bool Raytracer::Raycast(Ray& ray, RaycastHitInfo& hitInfo) {
 
 /// <summary>
 /// Möller–Trumbore intersection algorithm, given a ray and triangle, test intersection
+/// If successful intersection, outputs world space hit point and hit normal
 /// </summary>
 /// <param name="ray"></param>
 /// <param name="triangle"></param>
 /// <param name="hitInfo"></param>
 /// <returns></returns>
-bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo hitInfo) {
+bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix) {
 	//Image a plane where the triangle lies on, the ray will intersect with the plane if the plane is in front of the ray
 	//Once intersection happens with the plane, we can then figure out if the intersection point is inside the triangle
 	//Even if a plane is in front of the ray, the ray will miss it if it's parallel to the ray
 
 	//Get plane normal, which will be the same for the triangle normal since triangle lies flat on the imaginary plane
-	Vector3 edge1 = triangle.v1.vertexPos - triangle.v0.vertexPos;
-	Vector3 edge2 = triangle.v2.vertexPos - triangle.v0.vertexPos;
-	Vector3 planeNormal = Vector3::cross(edge1, edge2);
+	Vector3 _edge1 = triangle.v1.vertexPos - triangle.v0.vertexPos;
+	Vector3 _edge2 = triangle.v2.vertexPos - triangle.v0.vertexPos;
+	Vector3 planeNormal = Vector3::cross(_edge1, _edge2);
 	planeNormal.normalize();
 
 	float planeNormalDotRayDir = Vector3::dot(planeNormal, ray.direction);
@@ -62,7 +63,6 @@ bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo hit
 	//P = RayOrigin + t * RayDirection -> point on plane
 	Vector3 pointOnPlane = ray.origin + t * ray.direction;
 
-	//We now can use barycentric to see if this point is inside the triangle or not
 	//For all three edges, if dot(vector from first vertex of the edge to p, edge) > 0, then it means that the point is left of the edge
 	//When point is left of all three edges, the point is inside the triangle
 
@@ -77,10 +77,25 @@ bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo hit
 	Vector3 c1 = pointOnPlane - triangle.v1.vertexPos;
 	Vector3 c2 = pointOnPlane - triangle.v2.vertexPos;
 
-	hitInfo.hitPoint = pointOnPlane;
-	hitInfo.normal = planeNormal;
-	return Vector3::dot(planeNormal, Vector3::cross(edge0, c0)) > 0 &&
-		Vector3::dot(planeNormal, Vector3::cross(edge1, c1)) > 0 &&
-		Vector3::dot(planeNormal, Vector3::cross(edge2, c2)) > 0;
+	bool isPtInsideTriangle = Vector3::dot(planeNormal, Vector3::cross(edge0, c0)) >= 0 &&
+		Vector3::dot(planeNormal, Vector3::cross(edge1, c1)) >= 0 &&
+		Vector3::dot(planeNormal, Vector3::cross(edge2, c2)) >= 0;
+
+	if (!isPtInsideTriangle) return false;
+
+	//Write info only when pt is inside
+	//Transform hit point to world space
+	hitInfo.hitPoint = modelMatrix.TransformPoint(pointOnPlane);
+
+	//Normal needs to use inverse transpose of the model matrix
+	Matrix inverseTransposeModel;
+	if (RT_FAILURE == Matrix::InverseAndTranspose(modelMatrix, inverseTransposeModel)) {
+		std::cerr << "Failure during matrix inverse transpose calculation of model matrix";
+		return false;
+	}
+
+	hitInfo.normal = inverseTransposeModel.TransformPoint(planeNormal);
+	hitInfo.normal.normalize();
+	return true;
 }
 

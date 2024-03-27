@@ -8,6 +8,7 @@ class Raytracer {
 
 	//State machine
 public:
+	bool NearlyEquals(float a, float b);
 	Matrix modelMatrix; //Current matrix for object space to world space
 	Matrix inverseModelMatrix; //Current matrix for World space to object space
 	struct Pixel {
@@ -68,6 +69,9 @@ public:
 	//Helper ray cast functions
 	//Möller–Trumbore intersection algorithm
 	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo hitInfo);
+
+	private:
+		const float EPSILON = 0.00001f;
 };
 
 struct Vector3 {

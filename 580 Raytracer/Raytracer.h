@@ -15,6 +15,14 @@ class Raytracer {
 		Vector3 normal;
 	};
 
+	struct Ray {
+		Vector3 start;
+		Vector3 end;
+	};
+
+	//Returns true if intersects with an object
+	bool Raycast(Ray& ray, RaycastHitInfo& hitInfo);
+
 };
 struct Matrix;
 

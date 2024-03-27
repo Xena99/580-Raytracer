@@ -129,6 +129,9 @@
   <ItemGroup>
     <ClInclude Include="Raytracer.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Raytracer.cpp" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

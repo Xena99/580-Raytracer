@@ -1,82 +1,60 @@
 #pragma once
 #include <cmath>
 #include <vector>
+#include <unordered_map>
 
 //Defines
 #define RT_SUCCESS      0
 #define RT_FAILURE      1
 
-struct Matrix;
-struct Vector3;
+struct Pixel {
+	short r, g, b;
+};
 
-class Raytracer {
+struct Display {
+	Pixel* frameBuffer;
+	int xRex, yRes;
+};
 
-	//State machine
-public:
-	bool NearlyEquals(float a, float b);
-	Matrix modelMatrix; //Current matrix for object space to world space
-	Matrix inverseModelMatrix; //Current matrix for World space to object space
-	struct Pixel {
-		short r, g, b;
-	};
+struct RaycastHitInfo {
+	Vector3 hitPoint;
+	Vector3 normal;
+	float distance;
+};
 
-	struct Display {
-		Pixel* frameBuffer;
-		int xRex, yRes;
-	};
+struct Ray {
+	Vector3 origin; //World space
+	Vector3 direction; //Normalized
+};
 
-	struct RaycastHitInfo {
-		Vector3 hitPoint;
-		Vector3 normal;
-	};
+struct Vertex {
+	Vector3 vertexPos;
+	Vector3 vertexNormal;
+	Vector2 texture;
+};
 
-	struct Ray {
-		Vector3 origin; //World space
-		Vector3 direction; //Normalized
-	};
+struct Triangle {
+	Vertex v0;
+	Vertex v1;
+	Vertex v2;
+};
 
-	struct Vertex {
-		Vector3 vertexPos;
-		Vector3 vertexNormal;
-		Vector2 texture;
-	};
+struct Mesh {
+	std::vector<Triangle> triangles;
+};
 
-	struct Triangle {
-		Vertex v0;
-		Vertex v1;
-		Vertex v2;
-	};
-
-	struct Mesh {
-		std::vector<Triangle> triangles;
-	};
-
-	//Todo: need this later for generating ray
-	//Perspective & Camera
-	struct Camera
-	{
-		Matrix        viewMatrix;		/* world to image space */
-		Matrix        projectMatrix;  /* perspective projection */
-		Vector3 viewDirection;
-		Vector3 from;
-		Vector3 to;
-		float near, far, right, left, top, bottom;
-		int xRes;
-		int yRes;
-	};
-
-
-	//This is the main function against the whole scene, but we will need some helper raycasts
-	//Returns true if intersects with an object
-	bool Raycast(Ray& ray, RaycastHitInfo& hitInfo);
-
-
-	//Helper ray cast functions
-	//Möller–Trumbore intersection algorithm
-	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix);
-
-private:
-	const float EPSILON = 0.00001f;
+//Todo: need this later for generating ray
+//Perspective & Camera
+struct Camera
+{
+	Matrix        viewMatrix;		/* world to image space */
+	Matrix        projectMatrix;  /* perspective projection */
+	Vector3 viewDirection;
+	Vector3 from;
+	Vector3 to;
+	float near, far, right, left, top, bottom;
+	int xRes;
+	int yRes;
 };
 
 struct Vector3 {
@@ -310,4 +288,68 @@ struct Matrix {
 
 		return RT_SUCCESS;
 	}
+};
+
+//Scene
+struct Light {
+	Vector3 color;
+	float intensity;
+
+	Vector3 direction;
+};
+
+struct Transformation {
+	Vector3 scale = Vector3(1, 1, 1);
+	//Each x, y, z is rotation around that axis in degrees
+	Vector3 rotation;
+	Vector3 translation;
+};
+
+struct Material {
+	Vector3 surfaceColor;
+	float Ka;
+	float Kd;
+	float Ks;
+	float Kt;
+	float specularExpone;
+	//For now no texture, just material color
+	std::string textureId;
+};
+
+struct Shape
+{
+	std::string id;
+	std::string geometryId;
+	std::string notes;
+	Material material;
+	Transformation transforms;
+};
+
+struct Scene
+{
+	std::vector<Shape> shapes;
+	Camera camera;
+	std::unordered_map<std::string, Mesh*> meshMap;
+	std::vector<Light> lights;
+	Light directional;
+	Light ambie;
+};
+class Raytracer {
+
+	//State machine
+public:
+	bool NearlyEquals(float a, float b);
+
+	//This is the main function against the whole scene, but we will need some helper raycast
+	//Returns true if intersects with an object
+	bool Raycast(Ray& ray, RaycastHitInfo& hitInfo);
+
+
+	//Helper ray cast functions
+	//Möller–Trumbore intersection algorithm
+	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix);
+
+private:
+	const float EPSILON = 0.00001f;
+	Scene* mScene = nullptr;
 };

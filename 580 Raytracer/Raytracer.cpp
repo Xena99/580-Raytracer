@@ -10,14 +10,41 @@ bool Raytracer::NearlyEquals(float a, float b) {
 	return (std::abs(a - b) < EPSILON);
 }
 
+//TODO: For each shape compute model matrix
 /// <summary>
-/// Takes in a ray and computes intersection with scene, if has hit output hit point in world space and normal in hitInfo struct
+/// Takes in a ray and computes intersection with scene, if has hit outputs closest hit with hit point in world space, distance and normal in hitInfo struct
 /// </summary>
 /// <param name="ray"></param>
 /// <param name="hitInfo"></param>
 /// <returns></returns>
 bool Raytracer::Raycast(Ray& ray, RaycastHitInfo& hitInfo) {
+	RaycastHitInfo closestHit;
+	bool hasFoundHit = false;
+	for (Shape& m : mScene->shapes) {
+		Mesh* mesh = mScene->meshMap[m.geometryId];
 
+		//Todo: Compute model matrix from the current shape's transformation
+		Matrix modelMatrix;
+
+		for (Triangle& tri : mesh->triangles) {
+			RaycastHitInfo tempInfo;
+			if (RaycastTriangle(ray, tri, tempInfo, modelMatrix)) {
+				if (!hasFoundHit) {
+					hasFoundHit = true;
+					closestHit = tempInfo;
+				}
+				else {
+					if (tempInfo.distance < closestHit.distance) {
+						closestHit = tempInfo;
+					}
+				}
+			}
+		}
+	}
+
+	if (!hasFoundHit) return false;
+	hitInfo = closestHit;
+	return true;
 }
 
 
@@ -96,6 +123,7 @@ bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hi
 
 	hitInfo.normal = inverseTransposeModel.TransformPoint(planeNormal);
 	hitInfo.normal.normalize();
+	hitInfo.distance = t;
 	return true;
 }
 

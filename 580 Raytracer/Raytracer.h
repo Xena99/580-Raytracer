@@ -1,6 +1,15 @@
 #pragma once
 #include <cmath>
+#include <vector>
+struct Matrix;
+struct Vector3;
+
 class Raytracer {
+
+	//State machine
+public:
+	Matrix modelMatrix; //Current matrix for object space to world space
+	Matrix inverseModelMatrix; //Current matrix for World space to object space
 	struct Pixel {
 		short r, g, b;
 	};
@@ -16,15 +25,50 @@ class Raytracer {
 	};
 
 	struct Ray {
-		Vector3 start;
-		Vector3 end;
+		Vector3 origin; //World space
+		Vector3 direction; //Normalized
 	};
 
+	struct Vertex {
+		Vector3 vertexPos;
+		Vector3 vertexNormal;
+		Vector2 texture;
+	};
+
+	struct Triangle {
+		Vertex v0;
+		Vertex v1;
+		Vertex v2;
+	};
+
+	struct Mesh {
+		std::vector<Triangle> triangles;
+	};
+
+	//Todo: need this later for generating ray
+	//Perspective & Camera
+	struct Camera
+	{
+		NtMatrix        viewMatrix;		/* world to image space */
+		NtMatrix        projectMatrix;  /* perspective projection */
+		Vector3 viewDirection;
+		Vector3 from;
+		Vector3 to;
+		float near, far, right, left, top, bottom;
+		int xRes;
+		int yRes;
+	};
+
+
+	//This is the main function against the whole scene, but we will need some helper raycasts
 	//Returns true if intersects with an object
 	bool Raycast(Ray& ray, RaycastHitInfo& hitInfo);
 
+
+	//Helper ray cast functions
+	//Möller–Trumbore intersection algorithm
+	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo hitInfo);
 };
-struct Matrix;
 
 struct Vector3 {
 	union {

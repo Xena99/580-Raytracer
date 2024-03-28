@@ -1,5 +1,10 @@
 #include "Raytracer.h"
 #include <iostream>
+#include "ExternalPlugins/json.hpp"
+#include <fstream>
+
+//For timing render duration
+#include <chrono> 
 /// <summary>
 /// For float comparison
 /// </summary>
@@ -88,7 +93,7 @@ bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hi
 		return false;
 	}
 	//P = RayOrigin + t * RayDirection -> point on plane
-	Vector3 pointOnPlane = ray.origin + t * ray.direction;
+	Vector3 pointOnPlane = ray.origin + (ray.direction * t);
 
 	//For all three edges, if dot(vector from first vertex of the edge to p, edge) > 0, then it means that the point is left of the edge
 	//When point is left of all three edges, the point is inside the triangle
@@ -127,3 +132,182 @@ bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hi
 	return true;
 }
 
+
+//////Helper Functions//////
+int Raytracer::LoadMesh(const std::string meshName) {
+	auto it = mScene->meshMap.find(meshName);
+	if (it != mScene->meshMap.end()) {
+		std::cout << "Mesh map already contains " << meshName << ". Skipped loading" << std::endl;
+		return RT_SUCCESS;
+	}
+
+	std::ifstream file(ASSETS_PATH + meshName + ".json");
+	if (!file.is_open()) {
+		std::cout << "File with name " << ASSETS_PATH << meshName << ".json" << " could not be found";
+		return RT_FAILURE;
+	}
+
+	nlohmann::json jsonData;
+	file >> jsonData;
+
+	Mesh* mesh = new Mesh();
+	for (const auto& item : jsonData["data"]) {
+		Triangle triangle;
+		// Parse vertices
+		for (int i = 0; i < 3; ++i) {
+			std::string vertexKey = "v" + std::to_string(i);
+			Vector3 pos = { item[vertexKey]["v"][0], item[vertexKey]["v"][1], item[vertexKey]["v"][2] };
+			Vector3 norm = { item[vertexKey]["n"][0], item[vertexKey]["n"][1], item[vertexKey]["n"][2] };
+			Vector2 tex = { item[vertexKey]["t"][0], item[vertexKey]["t"][1] };
+
+			Vertex vertex;
+			vertex.vertexPos = pos;
+			vertex.vertexNormal = norm;
+			vertex.texture = tex;
+
+			switch (i) {
+			case 0: triangle.v0 = vertex; break;
+			case 1: triangle.v1 = vertex; break;
+			case 2: triangle.v2 = vertex; break;
+			}
+		}
+
+		mesh->triangles.push_back(triangle);
+	}
+
+	mScene->meshMap[meshName] = mesh;
+	return RT_SUCCESS;
+}
+
+int Raytracer::LoadSceneJSON(const std::string scenePath) {
+	using json = nlohmann::json;
+	int status = 0;
+	std::ifstream file(ASSETS_PATH + scenePath); // Assuming the JSON is stored in a file named "scene.json"
+
+	if (!file.is_open()) {
+		std::cerr << "Failed to open JSON file" << " Path: " << ASSETS_PATH << scenePath << "\n";
+		return RT_FAILURE;
+	}
+
+	// Parse the JSON
+	json jsonData;
+	try {
+		file >> jsonData;
+	}
+	catch (const std::exception& e) {
+		std::cout << "Error parsing JSON" << "\n";
+		return RT_FAILURE;
+	}
+
+	try {
+		mScene = new Scene();
+		// Parse shapes
+		if (jsonData["scene"].find("shapes") != jsonData["scene"].end()) {
+			for (const auto& shapeValue : jsonData["scene"]["shapes"]) {
+				Shape shape;
+				shape.id = shapeValue["id"];
+				shape.geometryId = shapeValue["geometry"];
+				shape.notes = shapeValue["notes"];
+
+				//Write material
+				const auto& material = shapeValue["material"];
+				shape.material.surfaceColor.x = material["Cs"][0];
+				shape.material.surfaceColor.y = material["Cs"][1];
+				shape.material.surfaceColor.z = material["Cs"][2];
+				shape.material.Ka = material["Ka"];
+				shape.material.Kd = material["Kd"];
+				shape.material.Ks = material["Ks"];
+				shape.material.specularExponet = material["n"];
+
+				//Auto load into mesh map
+				status |= LoadMesh(shape.geometryId);
+
+				//Write transformations
+				const auto& transforms = shapeValue["transforms"];
+				shape.transforms.scale.x = transforms[1]["S"][0];
+				shape.transforms.scale.y = transforms[1]["S"][1];
+				shape.transforms.scale.z = transforms[1]["S"][2];
+
+				//Write rotations
+				if (transforms[0].find("Ry") != transforms[0].end()) {
+					shape.transforms.rotation.y = transforms[0]["Ry"];
+				}
+				if (transforms[0].find("Rx") != transforms[0].end()) {
+					shape.transforms.rotation.x = transforms[0]["Rx"];
+				}
+				if (transforms[0].find("Rz") != transforms[0].end()) {
+					shape.transforms.rotation.z = transforms[0]["Rz"];
+				}
+
+				shape.transforms.translation.x = transforms[2]["T"][0];
+				shape.transforms.translation.y = transforms[2]["T"][1];
+				shape.transforms.translation.z = transforms[2]["T"][2];
+
+				mScene->shapes.push_back(shape);
+			}
+		}
+
+		// Parse camera
+		if (jsonData["scene"].find("camera") != jsonData["scene"].end()) {
+			const auto& cameraValue = jsonData["scene"]["camera"];
+			mScene->camera.from.x = cameraValue["from"][0];
+			mScene->camera.from.y = cameraValue["from"][1];
+			mScene->camera.from.z = cameraValue["from"][2];
+			mScene->camera.to.x = cameraValue["to"][0];
+			mScene->camera.to.y = cameraValue["to"][1];
+			mScene->camera.to.z = cameraValue["to"][2];
+			mScene->camera.near = cameraValue["bounds"][0];
+			mScene->camera.far = cameraValue["bounds"][1];
+			mScene->camera.right = cameraValue["bounds"][2];
+			mScene->camera.left = cameraValue["bounds"][3];
+			mScene->camera.top = cameraValue["bounds"][4];
+			mScene->camera.bottom = cameraValue["bounds"][5];
+
+			mScene->camera.xRes = cameraValue["resolution"][0];
+			mScene->camera.yRes = cameraValue["resolution"][1];
+		}
+
+		//Parse lights
+		if (jsonData["scene"].find("lights") != jsonData["scene"].end()) {
+			for (const auto& lightValue : jsonData["scene"]["lights"]) {
+				Light light;
+
+				// Common properties
+				light.color = Vector3(lightValue["color"][0], lightValue["color"][1], lightValue["color"][2]);
+				light.intensity = lightValue["intensity"];
+
+				std::string typeStr = lightValue["type"];
+				if (typeStr == "directional") {
+					Vector3 from = Vector3(lightValue["from"][0], lightValue["from"][1], lightValue["from"][2]);
+					Vector3 to = Vector3(lightValue["to"][0], lightValue["to"][1], lightValue["to"][2]);
+
+					mScene->directional = light;
+					mScene->directional.direction = to - from;
+					mScene->directional.direction.normalize();
+				}
+				mScene->lights.push_back(light);
+			}
+		}
+		std::cout << "Scene parsing completed!\n";
+		return status;
+	}
+	catch (const std::exception& e) {
+		std::cout << "Error parsing JSON " << e.what() << "\n";
+		return RT_FAILURE;
+	}
+}
+
+int main() {
+	//For recording duration stats
+	auto startTime = std::chrono::high_resolution_clock::now();
+
+	//Do ray tracing
+	Raytracer* rt = new Raytracer();
+	rt->LoadSceneJSON("scene.json");
+
+	auto stopTime = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);
+	std::cout << "\Raytracer completed in " << duration.count() << " milliseconds.\n";
+
+	return 0;
+}

@@ -302,8 +302,8 @@ int main() {
 	auto startTime = std::chrono::high_resolution_clock::now();
 
 	//Do ray tracing
-	Raytracer* rt = new Raytracer();
-	rt->LoadSceneJSON("scene.json");
+	Raytracer rt;
+	rt.LoadSceneJSON("scene.json");
 
 	auto stopTime = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);

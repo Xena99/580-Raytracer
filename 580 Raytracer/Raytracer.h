@@ -253,7 +253,7 @@ public:
 
 	struct Display {
 		Pixel* frameBuffer;
-		int xRex, yRes;
+		int xRes, yRes;
 	};
 
 	struct RaycastHitInfo {
@@ -354,7 +354,12 @@ public:
 	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix);
 	int LoadMesh(const std::string meshName);
 	int LoadSceneJSON(const std::string scenePath);
+	int FlushFrameBufferToPPM(std::string outputName);
+
+	//Constructor
+	Raytracer(int width, int height);
 private:
 	const float EPSILON = 0.00001f;
 	Scene* mScene = nullptr;
+	Display* mDisplay;
 };

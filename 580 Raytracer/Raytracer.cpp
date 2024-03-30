@@ -297,12 +297,50 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 	}
 }
 
+Raytracer::Raytracer(int width, int height) {
+	mDisplay = new Display();
+	mDisplay->xRes = width;
+	mDisplay->yRes = height;
+	mDisplay->frameBuffer = new Pixel[width * height];
+}
+
+
+/// <summary>
+/// Flush the current frame buffer to a ppm image
+/// </summary>
+/// <param name="outputName"></param>
+/// <returns></returns>
+int Raytracer::FlushFrameBufferToPPM(std::string outputName) {
+	if (mDisplay == nullptr || mDisplay->frameBuffer == nullptr) return RT_FAILURE;
+
+	FILE* outfile = nullptr;
+	errno_t errOutfile = fopen_s(&outfile, outputName.c_str(), "wb");
+	if (errOutfile != 0 || outfile == nullptr) {
+		std::cout << "Failed to create output file: " << outputName << "\n";
+		return RT_FAILURE;
+	}
+	// Write the PPM header
+	fprintf(outfile, "P3\n%d %d\n%d\n", mDisplay->xRes, mDisplay->yRes, 5333);
+
+	for (int y = 0; y < mDisplay->yRes; y++) {
+		for (int x = 0; x < mDisplay->xRes; x++) {
+			// Accessing the pixel at (x, y)
+			Pixel pixel = mDisplay->frameBuffer[y * mDisplay->xRes + x];
+
+			// Write the RGB values to the file
+			fprintf(outfile, "%d %d %d ", pixel.r, pixel.g, pixel.b);
+		}
+		fprintf(outfile, "\n"); // Newline after each row of pixels
+	}
+	return RT_SUCCESS;
+}
+
 int main() {
 	//For recording duration stats
 	auto startTime = std::chrono::high_resolution_clock::now();
 
 	//Do ray tracing
-	Raytracer rt;
+	Raytracer rt(512, 512);
 	rt.LoadSceneJSON("scene.json");
 
 	auto stopTime = std::chrono::high_resolution_clock::now();

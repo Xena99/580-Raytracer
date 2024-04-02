@@ -13,6 +13,8 @@ class Raytracer {
 
 	//State machine
 public:
+	struct Shape;
+	struct Triangle;
 	//Structures
 	struct Vector3 {
 		union {
@@ -249,6 +251,10 @@ public:
 
 	struct Pixel {
 		short r, g, b;
+
+		Pixel(short _r, short _g, short _b) : r(_r), g(_g), b(_b) {}
+
+		Pixel() : r(0), g(0), b(0) {}
 	};
 
 	struct Display {
@@ -260,6 +266,8 @@ public:
 		Vector3 hitPoint;
 		Vector3 normal;
 		float distance;
+		
+		Triangle* triangle;
 	};
 
 	struct Ray {
@@ -344,14 +352,14 @@ public:
 
 	bool NearlyEquals(float a, float b);
 
-	//This is the main function against the whole scene, but we will need some helper raycast
-	//Returns true if intersects with an object
-	bool Raycast(Ray& ray, RaycastHitInfo& hitInfo);
+	//Returns the pixel value to directly put in frame buffer
+	Pixel Raycast(Ray& ray);
 
 
 	//Helper ray cast functions
 	//Möller–Trumbore intersection algorithm
-	bool RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix);
+	bool IntersectTriangle(const Ray& ray, const Triangle& triangle, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
+	bool IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo);
 	int LoadMesh(const std::string meshName);
 	int LoadSceneJSON(const std::string scenePath);
 	int FlushFrameBufferToPPM(std::string outputName);
@@ -362,4 +370,8 @@ private:
 	const float EPSILON = 0.00001f;
 	Scene* mScene = nullptr;
 	Display* mDisplay;
+
+	//Default colors
+	const Pixel BG_COLOR = Pixel(0, 0, 0);
+	const Pixel SHADOW_COLOR = Pixel(0, 0, 0);
 };

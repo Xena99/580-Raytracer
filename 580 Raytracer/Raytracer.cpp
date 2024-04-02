@@ -22,36 +22,19 @@ bool Raytracer::NearlyEquals(float a, float b) {
 /// <param name="ray"></param>
 /// <param name="hitInfo"></param>
 /// <returns></returns>
-bool Raytracer::Raycast(Ray& ray, RaycastHitInfo& hitInfo) {
-	RaycastHitInfo closestHit;
-	bool hasFoundHit = false;
-	for (Shape& m : mScene->shapes) {
-		Mesh* mesh = mScene->meshMap[m.geometryId];
-
-		//Todo: Compute model matrix from the current shape's transformation
-		Matrix modelMatrix;
-
-		for (Triangle& tri : mesh->triangles) {
-			RaycastHitInfo tempInfo;
-			if (RaycastTriangle(ray, tri, tempInfo, modelMatrix)) {
-				if (!hasFoundHit) {
-					hasFoundHit = true;
-					closestHit = tempInfo;
-				}
-				else {
-					if (tempInfo.distance < closestHit.distance) {
-						closestHit = tempInfo;
-					}
-				}
-			}
-		}
+Raytracer::Pixel Raytracer::Raycast(Ray& ray) {
+	RaycastHitInfo info;
+	if (!IntersectScene(ray, info)) {
+		return BG_COLOR;
 	}
 
-	if (!hasFoundHit) return false;
-	hitInfo = closestHit;
-	return true;
-}
+	//Todo: Here we need to know alpha beta gamma for the triangle we hit
+	//At intersection, we need to do Phong lighting, mix it with reflection, etc
 
+	//Todo: calculate interpolated normal
+	//IMPORTANT: calculations should use interpolated normal, not the triangle's normal
+	return BG_COLOR;
+}
 
 /// <summary>
 /// Möller–Trumbore intersection algorithm, given a ray and triangle, test intersection
@@ -61,7 +44,7 @@ bool Raytracer::Raycast(Ray& ray, RaycastHitInfo& hitInfo) {
 /// <param name="triangle"></param>
 /// <param name="hitInfo"></param>
 /// <returns></returns>
-bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hitInfo, Matrix& modelMatrix) {
+bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, RaycastHitInfo& hitInfo, const Matrix& modelMatrix) {
 	//Image a plane where the triangle lies on, the ray will intersect with the plane if the plane is in front of the ray
 	//Once intersection happens with the plane, we can then figure out if the intersection point is inside the triangle
 	//Even if a plane is in front of the ray, the ray will miss it if it's parallel to the ray
@@ -132,7 +115,35 @@ bool Raytracer::RaycastTriangle(Ray& ray, Triangle& triangle, RaycastHitInfo& hi
 	return true;
 }
 
+bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
+	RaycastHitInfo closestHit;
+	bool hasFoundHit = false;
+	for (Shape& m : mScene->shapes) {
+		Mesh* mesh = mScene->meshMap[m.geometryId];
 
+		//Todo: Compute model matrix from the current shape's transformation
+		Matrix modelMatrix;
+
+		for (Triangle& tri : mesh->triangles) {
+			RaycastHitInfo tempInfo;
+			if (IntersectTriangle(ray, tri, tempInfo, modelMatrix)) {
+				if (!hasFoundHit) {
+					hasFoundHit = true;
+					closestHit = tempInfo;
+				}
+				else {
+					if (tempInfo.distance < closestHit.distance) {
+						closestHit = tempInfo;
+					}
+				}
+			}
+		}
+	}
+
+	if (!hasFoundHit) return false;
+	hitInfo = closestHit;
+	return true;
+}
 //////Helper Functions//////
 int Raytracer::LoadMesh(const std::string meshName) {
 	auto it = mScene->meshMap.find(meshName);

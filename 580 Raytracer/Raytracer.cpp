@@ -130,10 +130,12 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 				if (!hasFoundHit) {
 					hasFoundHit = true;
 					closestHit = tempInfo;
+					closestHit.triangle = &tri;
 				}
 				else {
 					if (tempInfo.distance < closestHit.distance) {
 						closestHit = tempInfo;
+						closestHit.triangle = &tri;
 					}
 				}
 			}

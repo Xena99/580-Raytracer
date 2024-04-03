@@ -6,6 +6,8 @@
 //Defines
 #define RT_SUCCESS      0
 #define RT_FAILURE      1
+#define RT_INVALID_ARG  2
+#define M_PI 3.141
 
 const std::string ASSETS_PATH = "Assets/";
 
@@ -15,6 +17,21 @@ class Raytracer {
 public:
 	struct Shape;
 	struct Triangle;
+	struct Vector3;
+	struct Vector2;
+	struct Matrix;
+	struct Pixel;
+	struct Display;
+	struct RaycastHitInfo;
+	struct Ray;
+	struct Vertex;
+	struct Mesh;
+	struct Camera;
+	struct Light;
+	struct Transformation;
+	struct Material;
+	struct Scene;
+
 	//Structures
 	struct Vector3 {
 		union {
@@ -53,6 +70,10 @@ public:
 
 		Vector3 operator+(const Vector3& other) const {
 			return { x + other.x, y + other.y, z + other.z };
+		}
+
+		Vector3 operator-() const {
+			return Vector3(-x, -y, -z);
 		}
 
 		// Normalize the vector
@@ -266,7 +287,6 @@ public:
 		Vector3 hitPoint;
 		Vector3 normal;
 		float distance;
-
 		Triangle* triangle;
 	};
 
@@ -281,10 +301,22 @@ public:
 		Vector2 texture;
 	};
 
+	struct Material {
+		Vector3 surfaceColor;
+		float Ka;
+		float Kd;
+		float Ks;
+		float Kt;
+		float specularExponet;
+		//For now no texture, just material color
+		std::string textureId;
+	};
+
 	struct Triangle {
 		Vertex v0;
 		Vertex v1;
 		Vertex v2;
+		Material material;
 	};
 
 	struct Mesh {
@@ -320,17 +352,6 @@ public:
 		Vector3 translation;
 	};
 
-	struct Material {
-		Vector3 surfaceColor;
-		float Ka;
-		float Kd;
-		float Ks;
-		float Kt;
-		float specularExponet;
-		//For now no texture, just material color
-		std::string textureId;
-	};
-
 	struct Shape
 	{
 		std::string id;
@@ -347,13 +368,13 @@ public:
 		std::unordered_map<std::string, Mesh*> meshMap;
 		std::vector<Light> lights;
 		Light directional;
-		Light ambie;
+		Light ambient;
 	};
 
 	bool NearlyEquals(float a, float b);
 
 	//Returns the pixel value to directly put in frame buffer
-	Pixel Raycast(Ray& ray);
+	Pixel Raycast(Ray& ray, int depth);
 
 
 	//Helper ray cast functions
@@ -363,9 +384,13 @@ public:
 	int LoadMesh(const std::string meshName);
 	int LoadSceneJSON(const std::string scenePath);
 	int FlushFrameBufferToPPM(std::string outputName);
+	Matrix ComputeModelMatrix(const Transformation& transform);
+	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo);
+	Pixel MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight);
 
 	//Constructor
 	Raytracer(int width, int height);
+
 private:
 	const float EPSILON = 0.00001f;
 	Scene* mScene = nullptr;

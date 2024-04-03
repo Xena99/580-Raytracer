@@ -22,18 +22,87 @@ bool Raytracer::NearlyEquals(float a, float b) {
 /// <param name="ray"></param>
 /// <param name="hitInfo"></param>
 /// <returns></returns>
-Raytracer::Pixel Raytracer::Raycast(Ray& ray) {
-	RaycastHitInfo info;
-	if (!IntersectScene(ray, info)) {
-		return BG_COLOR;
+/// The depth parameter in recursive ray tracing is used to control the maximum number of times a ray can be reflected
+Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
+	if (depth <= 0) {
+		return BG_COLOR; // Reached maximum recursion depth
 	}
 
-	//Todo: Here we need to know alpha beta gamma for the triangle we hit
-	//At intersection, we need to do Phong lighting, mix it with reflection, etc
+	RaycastHitInfo info;
+	if (!IntersectScene(ray, info)) {
+		return BG_COLOR; // No hit, return background color
+	}
 
-	//Todo: calculate interpolated normal
-	//IMPORTANT: calculations should use interpolated normal, not the triangle's normal
-	return BG_COLOR;
+	// Calculate local color using Phong lighting or other shading model
+	Pixel localColor = CalculateLocalColor(info);
+
+	// Check if the material is reflective
+	if (info.triangle->material.Ks > 0) {
+		// Calculate reflection ray
+		Ray reflectionRay;
+		reflectionRay.origin = info.hitPoint;
+		reflectionRay.direction = Vector3::reflect(ray.direction, info.normal);
+		reflectionRay.direction.normalize();
+
+		// For each hit, if the material of the hit object is reflective, 
+		// you need to trace a new ray from the hit point in the reflection direction. 
+		// This new ray will then be used to determine what the original ray "sees" in the reflection.
+		Pixel reflectionColor = Raycast(reflectionRay, depth - 1);
+
+		// The color returned by the reflected ray needs to be combined with the original
+		// surface color to get the final color. 
+		// This can be done using the material's reflection coefficient.
+		localColor = MixColors(localColor, reflectionColor, info.triangle->material.Ks);
+	}
+
+	return localColor;
+}
+
+//color1 is the original surface color, color2 is the color returned by the reflected ray, 
+// and weight is the material's reflection coefficient (Ks). 
+Raytracer::Pixel Raytracer::MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight) {
+	Raytracer::Pixel result;
+	result.r = static_cast<short>(std::min(255.0f, color1.r * (1 - weight) + color2.r * weight));
+	result.g = static_cast<short>(std::min(255.0f, color1.g * (1 - weight) + color2.g * weight));
+	result.b = static_cast<short>(std::min(255.0f, color1.b * (1 - weight) + color2.b * weight));
+	return result;
+}
+
+
+Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo) {
+	Pixel color = { 0, 0, 0 };
+
+	// Ambient component
+	Vector3 ambient = mScene->ambient.color * hitInfo.triangle->material.Ka;
+
+	// Diffuse and specular components
+	Vector3 diffuse = { 0, 0, 0 };
+	Vector3 specular = { 0, 0, 0 };
+	for (const Light& light : mScene->lights) {
+		Vector3 lightDir = light.direction - hitInfo.hitPoint;
+		lightDir.normalize();
+
+		// Diffuse reflection
+		float NdotL = std::max(0.0f, hitInfo.normal.dot(lightDir));
+		diffuse = diffuse + light.color * NdotL * hitInfo.triangle->material.Kd;
+
+		// Specular reflection
+		Vector3 viewDir = mScene->camera.from - hitInfo.hitPoint;
+		viewDir.normalize();
+		Vector3 reflectDir = Vector3::reflect(-lightDir, hitInfo.normal);
+		float RdotV = std::max(0.0f, reflectDir.dot(viewDir));
+		specular = specular + light.color * hitInfo.triangle->material.Ks * std::pow(RdotV, hitInfo.triangle->material.specularExponet);
+	}
+
+	// Combine components
+	Vector3 finalColor = ambient + diffuse + specular;
+
+	// Convert to Pixel format and clamp values
+	color.r = std::min(static_cast<short>(finalColor.x * 255), static_cast<short>(255));
+	color.g = std::min(static_cast<short>(finalColor.y * 255), static_cast<short>(255));
+	color.b = std::min(static_cast<short>(finalColor.z * 255), static_cast<short>(255));
+
+	return color;
 }
 
 /// <summary>
@@ -122,7 +191,7 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 		Mesh* mesh = mScene->meshMap[m.geometryId];
 
 		//Todo: Compute model matrix from the current shape's transformation
-		Matrix modelMatrix;
+		Matrix modelMatrix = ComputeModelMatrix(m.transforms);
 
 		for (Triangle& tri : mesh->triangles) {
 			RaycastHitInfo tempInfo;
@@ -146,6 +215,62 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 	hitInfo = closestHit;
 	return true;
 }
+
+Raytracer::Matrix Raytracer::ComputeModelMatrix(const Raytracer::Transformation& transform) {
+	// Create scale matrix
+	Raytracer::Matrix scaleMatrix;
+	scaleMatrix[0][0] = transform.scale.x;
+	scaleMatrix[1][1] = transform.scale.y;
+	scaleMatrix[2][2] = transform.scale.z;
+	scaleMatrix[3][3] = 1.0f;
+
+	// Create rotation matrices
+	float radX = transform.rotation.x * M_PI / 180.0f;
+	float radY = transform.rotation.y * M_PI / 180.0f;
+	float radZ = transform.rotation.z * M_PI / 180.0f;
+
+	Raytracer::Matrix rotationXMatrix;
+	rotationXMatrix[1][1] = cos(radX);
+	rotationXMatrix[1][2] = -sin(radX);
+	rotationXMatrix[2][1] = sin(radX);
+	rotationXMatrix[2][2] = cos(radX);
+	rotationXMatrix[0][0] = 1.0f;
+	rotationXMatrix[3][3] = 1.0f;
+
+	Raytracer::Matrix rotationYMatrix;
+	rotationYMatrix[0][0] = cos(radY);
+	rotationYMatrix[0][2] = sin(radY);
+	rotationYMatrix[2][0] = -sin(radY);
+	rotationYMatrix[2][2] = cos(radY);
+	rotationYMatrix[1][1] = 1.0f;
+	rotationYMatrix[3][3] = 1.0f;
+
+	Raytracer::Matrix rotationZMatrix;
+	rotationZMatrix[0][0] = cos(radZ);
+	rotationZMatrix[0][1] = -sin(radZ);
+	rotationZMatrix[1][0] = sin(radZ);
+	rotationZMatrix[1][1] = cos(radZ);
+	rotationZMatrix[2][2] = 1.0f;
+	rotationZMatrix[3][3] = 1.0f;
+
+	// Combine rotation matrices
+	Raytracer::Matrix rotationMatrix = rotationZMatrix * rotationYMatrix * rotationXMatrix;
+
+	// Create translation matrix
+	Raytracer::Matrix translationMatrix;
+	translationMatrix[0][3] = transform.translation.x;
+	translationMatrix[1][3] = transform.translation.y;
+	translationMatrix[2][3] = transform.translation.z;
+	translationMatrix[0][0] = 1.0f;
+	translationMatrix[1][1] = 1.0f;
+	translationMatrix[2][2] = 1.0f;
+	translationMatrix[3][3] = 1.0f;
+
+	// Combine all transformations
+	Raytracer::Matrix modelMatrix = translationMatrix * rotationMatrix * scaleMatrix;
+	return modelMatrix;
+}
+
 //////Helper Functions//////
 int Raytracer::LoadMesh(const std::string meshName) {
 	auto it = mScene->meshMap.find(meshName);

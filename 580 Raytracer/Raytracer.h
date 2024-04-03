@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <cmath>
 #include <vector>
 #include <unordered_map>
@@ -266,7 +266,7 @@ public:
 		Vector3 hitPoint;
 		Vector3 normal;
 		float distance;
-		
+
 		Triangle* triangle;
 	};
 
@@ -357,7 +357,7 @@ public:
 
 
 	//Helper ray cast functions
-	//Möller–Trumbore intersection algorithm
+	//MÃ¶llerÂ–Trumbore intersection algorithm
 	bool IntersectTriangle(const Ray& ray, const Triangle& triangle, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
 	bool IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo);
 	int LoadMesh(const std::string meshName);

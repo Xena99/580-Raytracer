@@ -76,11 +76,15 @@ public:
 			return Vector3(-x, -y, -z);
 		}
 
-		// Normalize the vector
-		void normalize() {
-			float length = std::sqrt(x * x + y * y + z * z);
-			x /= length; y /= length; z /= length;
+		float length_squared() const {
+			return x * x + y * y + z * z;
 		}
+
+		Vector3 normalize() const {
+			float length = std::sqrt(x * x + y * y + z * z);
+			return Vector3(x / length, y / length, z / length);
+		}
+
 
 		// Cross product
 		static Vector3 cross(const Vector3& a, const Vector3& b) {
@@ -293,6 +297,8 @@ public:
 	struct Ray {
 		Vector3 origin; //World space
 		Vector3 direction; //Normalized
+		Ray(const Vector3& origin, const Vector3& direction) : origin(origin), direction(direction) {}
+
 	};
 
 	struct Vertex {
@@ -387,9 +393,12 @@ public:
 	Matrix ComputeModelMatrix(const Transformation& transform);
 	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo);
 	Pixel MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight);
-
+	Vector3 RandomUnitVector();
+	Vector3 RandomInHemisphere(const Raytracer::Vector3& normal);
+	float CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, const Raytracer::Vector3& normal);
 	//Constructor
 	Raytracer(int width, int height);
+
 
 private:
 	const float EPSILON = 0.00001f;

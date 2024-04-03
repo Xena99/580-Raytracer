@@ -2,6 +2,8 @@
 #include <iostream>
 #include "ExternalPlugins/json.hpp"
 #include <fstream>
+#include <random>
+
 
 //For timing render duration
 #include <chrono> 
@@ -39,10 +41,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 	// Check if the material is reflective
 	if (info.triangle->material.Ks > 0) {
 		// Calculate reflection ray
-		Ray reflectionRay;
-		reflectionRay.origin = info.hitPoint;
-		reflectionRay.direction = Vector3::reflect(ray.direction, info.normal);
-		reflectionRay.direction.normalize();
+		Ray reflectionRay(info.hitPoint, Vector3::reflect(ray.direction, info.normal).normalize());
 
 		// For each hit, if the material of the hit object is reflective, 
 		// you need to trace a new ray from the hit point in the reflection direction. 
@@ -73,7 +72,10 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo) {
 	Pixel color = { 0, 0, 0 };
 
 	// Ambient component
-	Vector3 ambient = mScene->ambient.color * hitInfo.triangle->material.Ka;
+	float aoFactor = CalculateAmbientOcclusion(hitInfo.hitPoint, hitInfo.normal);
+
+	// Scale the ambient component by the AO factor
+	Vector3 ambient = mScene->ambient.color * hitInfo.triangle->material.Ka * aoFactor;
 
 	// Diffuse and specular components
 	Vector3 diffuse = { 0, 0, 0 };
@@ -104,6 +106,49 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo) {
 
 	return color;
 }
+
+Raytracer::Vector3 Raytracer::RandomUnitVector() {
+	std::uniform_real_distribution<float> distribution(0.0, 1.0);
+	std::default_random_engine generator;
+	Raytracer::Vector3 p;
+	do {
+		p = Raytracer::Vector3(distribution(generator), distribution(generator), distribution(generator)) * 2.0f - Raytracer::Vector3(1, 1, 1);
+	} while (p.length_squared() >= 1.0f);
+	return p;
+}
+
+Raytracer::Vector3 Raytracer::RandomInHemisphere(const Raytracer::Vector3& normal) {
+	Raytracer::Vector3 in_unit_sphere = RandomUnitVector(); // Function to create a random unit vector
+	if (in_unit_sphere.dot(normal) > 0.0) { // In the same hemisphere as the normal
+		return in_unit_sphere;
+	}
+	else {
+		return -in_unit_sphere;
+	}
+}
+
+float Raytracer::CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, const Raytracer::Vector3& normal) {
+	int numSamples = 16; // Number of samples to check for occlusion
+	float occlusionRadius = 0.5f; // Max distance to check for occlusion
+	int occludedCount = 0;
+
+	for (int i = 0; i < numSamples; ++i) {
+		Raytracer::Vector3 randomDir = RandomInHemisphere(normal);
+		Ray occlusionRay(hitPoint, randomDir);
+		RaycastHitInfo occlusionInfo;
+
+		if (IntersectScene(occlusionRay, occlusionInfo)) {
+			if (occlusionInfo.distance < occlusionRadius) {
+				occludedCount++;
+			}
+		}
+	}
+
+	// Return the proportion of the hemisphere that is NOT occluded
+	return 1.0f - (float)occludedCount / (float)numSamples;
+}
+
+
 
 /// <summary>
 /// Möller–Trumbore intersection algorithm, given a ray and triangle, test intersection

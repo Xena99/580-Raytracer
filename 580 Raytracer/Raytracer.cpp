@@ -35,8 +35,23 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 		return BG_COLOR; // No hit, return background color
 	}
 
-	// Calculate local color using Phong lighting or other shading model
-	Pixel localColor = CalculateLocalColor(info);
+	Pixel localColor = Pixel(0, 0, 0);
+
+	//Loop through all light sources and determine if pixel is occluded from it
+	//If is, no contribution added, else compute local Phong lighting and add the contribution
+	for (Light& light : mScene->lights) {
+		//Make new ray from intersection point to light source
+		Ray lightRay(info.hitPoint, light.direction);
+		RaycastHitInfo lightInfo;
+		float distToLight = (light.position - info.hitPoint).length();
+
+		//If pixel is occluded to this current light source, no light contribution is added
+		//If intersection is past the distance to light, then means it's behind light, thus still contribution
+		if (!IntersectScene(lightRay, lightInfo) || lightInfo.distance > distToLight) {
+			// Calculate local color using Phong lighting or other shading model
+			localColor = localColor + CalculateLocalColor(lightInfo);
+		}
+	}
 
 	// Check if the material is reflective
 	if (info.triangle->material.Ks > 0) {
@@ -464,9 +479,17 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 					Vector3 from = Vector3(lightValue["from"][0], lightValue["from"][1], lightValue["from"][2]);
 					Vector3 to = Vector3(lightValue["to"][0], lightValue["to"][1], lightValue["to"][2]);
 
+					light.direction = to - from;
+					light.direction.normalize();
+					light.lightType = Light::Directional;
 					mScene->directional = light;
-					mScene->directional.direction = to - from;
-					mScene->directional.direction.normalize();
+				}
+				else if (typeStr == "ambient") {
+					light.lightType = Light::Ambient;
+				}
+				else if (typeStr == "point") {
+					light.lightType = Light::Point;
+					light.position = Vector3(lightValue["position"][0], lightValue["position"][1], lightValue["position"][2]);
 				}
 				mScene->lights.push_back(light);
 			}

@@ -84,7 +84,9 @@ public:
 			return Vector3(x / length, y / length, z / length);
 		}
 
-
+		float length() const {
+			return std::sqrt(x * x + y * y + z * z);
+		}
 		// Cross product
 		static Vector3 cross(const Vector3& a, const Vector3& b) {
 			return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x };
@@ -279,6 +281,14 @@ public:
 		Pixel(short _r, short _g, short _b) : r(_r), g(_g), b(_b) {}
 
 		Pixel() : r(0), g(0), b(0) {}
+		// Vector subtraction
+		Pixel operator-(const Pixel& other) const {
+			return { r - other.r, g - other.g, b - other.b };
+		}
+
+		Pixel operator+(const Pixel& other) const {
+			return { r + other.r, g + other.g, b + other.b };
+		}
 	};
 
 	struct Display {
@@ -344,10 +354,16 @@ public:
 
 	//Scene
 	struct Light {
+		enum Type {
+			Directional,
+			Point,
+			Ambient
+		};
 		Vector3 color;
 		float intensity;
-
+		Vector3 position;
 		Vector3 direction;
+		Type lightType;
 	};
 
 	struct Transformation {

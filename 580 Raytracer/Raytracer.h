@@ -12,9 +12,6 @@
 const std::string ASSETS_PATH = "Assets/";
 
 class Raytracer {
-
-	//State machine
-public:
 	struct Shape;
 	struct Triangle;
 	struct Vector3;
@@ -31,6 +28,8 @@ public:
 	struct Transformation;
 	struct Material;
 	struct Scene;
+	//State machine
+public:
 
 	//Structures
 	struct Vector3 {

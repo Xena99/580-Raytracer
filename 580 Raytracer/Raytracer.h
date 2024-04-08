@@ -7,7 +7,7 @@
 #define RT_SUCCESS      0
 #define RT_FAILURE      1
 #define RT_INVALID_ARG  2
-#define M_PI 3.141
+#define PI 3.14159265
 
 const std::string ASSETS_PATH = "Assets/";
 
@@ -79,9 +79,13 @@ public:
 			return x * x + y * y + z * z;
 		}
 
-		Vector3 normalize() const {
+		void normalize() {
 			float length = std::sqrt(x * x + y * y + z * z);
-			return Vector3(x / length, y / length, z / length);
+			if (length > 0) {
+				x /= length;
+				y /= length;
+				z /= length;
+			}
 		}
 
 		float length() const {
@@ -283,15 +287,33 @@ public:
 		Pixel() : r(0), g(0), b(0) {}
 		// Vector subtraction
 		Pixel operator-(const Pixel& other) const {
-			return { r - other.r, g - other.g, b - other.b };
+			return Pixel(
+				static_cast<short>(r - other.r),
+				static_cast<short>(g - other.g),
+				static_cast<short>(b - other.b)
+			);
 		}
 
 		Pixel operator+(const Pixel& other) const {
-			return { r + other.r, g + other.g, b + other.b };
+			return Pixel(
+				static_cast<short>(r + other.r),
+				static_cast<short>(g + other.g),
+				static_cast<short>(b + other.b)
+			);
+		}
+
+		Pixel clamp() const {
+			Pixel result;
+			result.r = (r > 255) ? 255 : (r < 0 ? 0 : r);
+			result.g = (g > 255) ? 255 : (g < 0 ? 0 : g);
+			result.b = (b > 255) ? 255 : (b < 0 ? 0 : b);
+			return result;
 		}
 	};
 
 	struct Display {
+		float fov; //Default to 60
+
 		Pixel* frameBuffer;
 		int xRes, yRes;
 	};
@@ -301,13 +323,17 @@ public:
 		Vector3 normal;
 		float distance;
 		Triangle* triangle;
+
+		float alpha;
+		float beta;
+		float gamma;
 	};
 
 	struct Ray {
+		Ray() {};
 		Vector3 origin; //World space
 		Vector3 direction; //Normalized
 		Ray(const Vector3& origin, const Vector3& direction) : origin(origin), direction(direction) {}
-
 	};
 
 	struct Vertex {
@@ -331,7 +357,7 @@ public:
 		Vertex v0;
 		Vertex v1;
 		Vertex v2;
-		Material material;
+		int shapeId;
 	};
 
 	struct Mesh {
@@ -347,7 +373,12 @@ public:
 		Vector3 viewDirection;
 		Vector3 from;
 		Vector3 to;
-		float near, far, right, left, top, bottom;
+		float camNear;
+		float camFar;
+		float camRight;
+		float camLeft;
+		float camTop;
+		float camBottom;
 		int xRes;
 		int yRes;
 	};
@@ -402,25 +433,41 @@ public:
 	//MöllerTrumbore intersection algorithm
 	bool IntersectTriangle(const Ray& ray, const Triangle& triangle, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
 	bool IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo);
-	int LoadMesh(const std::string meshName);
+	int LoadMesh(const std::string meshName, const int shapeId);
 	int LoadSceneJSON(const std::string scenePath);
 	int FlushFrameBufferToPPM(std::string outputName);
 	Matrix ComputeModelMatrix(const Transformation& transform);
-	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo);
+	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light);
 	Pixel MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight);
 	Vector3 RandomUnitVector();
 	Vector3 RandomInHemisphere(const Raytracer::Vector3& normal);
 	float CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, const Raytracer::Vector3& normal);
+	float ToRadian(float degrees) {
+		return degrees * (PI / 180);
+	}
+	float Clipf(float input, int min, int max);
+	void GenerateRay(int x, int y, Ray& ray);
+	int Render(const std::string outputName);
 	//Constructor
 	Raytracer(int width, int height);
 
 
 private:
-	const float EPSILON = 0.00001f;
+	const float EPSILON = 1e-6;
 	Scene* mScene = nullptr;
 	Display* mDisplay;
 
 	//Default colors
-	const Pixel BG_COLOR = Pixel(0, 0, 0);
+	const Pixel BG_COLOR = Pixel(255, 255, 255);
 	const Pixel SHADOW_COLOR = Pixel(0, 0, 0);
+
+	//Helper
+	void LoadIdentityMatrix(Matrix& mat);
+	int CalculateViewMatrix(Camera& camera, Vector3 u, Vector3 v, Vector3 n, Vector3 r);
+	int CalculateProjectionMatrix(Camera& camera, float camNear, float far, float top, float bottom, float left, float right);
+	int InitializeRenderer();
+	float CalcTriangleAreaSigned(const Vector3& A, const Vector3& B, const Vector3& C, const Vector3& planeNormal);
+	Vector3 InterpolateVector3(const Vector3 vectors[], float alpha, float beta, float gamma, bool isNormal);
+	//Debugging functions
+	void PrintProgress(int current, int total);
 };

@@ -14,6 +14,7 @@ const std::string ASSETS_PATH = "Assets/";
 class Raytracer {
 	struct Shape;
 	struct Triangle;
+	struct Sphere;
 	struct Vector3;
 	struct Vector2;
 	struct Matrix;
@@ -323,7 +324,7 @@ public:
 		Vector3 normal;
 		float distance;
 		Triangle* triangle;
-
+		Sphere* sphere;
 		float alpha;
 		float beta;
 		float gamma;
@@ -358,6 +359,11 @@ public:
 		Vertex v1;
 		Vertex v2;
 		int shapeId;
+	};
+
+	struct Sphere {
+		Vector3 position;
+		float radius;
 	};
 
 	struct Mesh {
@@ -424,7 +430,9 @@ public:
 	};
 
 	bool NearlyEquals(float a, float b);
-
+	bool GreaterThanZero(float value) {
+		return value > EPSILON;
+	}
 	//Returns the pixel value to directly put in frame buffer
 	Pixel Raycast(Ray& ray, int depth);
 
@@ -432,6 +440,7 @@ public:
 	//Helper ray cast functions
 	//MöllerTrumbore intersection algorithm
 	bool IntersectTriangle(const Ray& ray, const Triangle& triangle, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
+	bool IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
 	bool IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo);
 	int LoadMesh(const std::string meshName, const int shapeId);
 	int LoadSceneJSON(const std::string scenePath);

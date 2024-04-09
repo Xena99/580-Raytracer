@@ -93,6 +93,8 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 		localColor = MixColors(localColor, reflectionColor, material.Ks);
 	}
 
+	//Todo: Add refraction
+
 	return localColor.clamp();
 }
 
@@ -277,6 +279,53 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 	hitInfo.gamma = gamma;
 	return true;
 }
+
+/// <summary>
+/// Intersecting with a sphere, tests intersection
+/// </summary>
+/// <param name="ray"></param>
+/// <param name="triangle"></param>
+/// <param name="hitInfo"></param>
+/// <param name="modelMatrix"></param>
+/// <returns></returns>
+bool Raytracer::IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHitInfo& hitInfo, const Matrix& modelMatrix) {
+	float a = 1.0f;
+
+	//Ray origin - sphere center
+	Vector3 oc = ray.origin - sphere.position;
+	float b = 2.0 * (Vector3::dot(ray.direction, oc));
+	float c = (Vector3::dot(oc, oc) - (sphere.radius * sphere.radius));
+	//b^2 - 4ac: discriminant
+	float d = (b * b) - (4 * a * c);
+	if (d < 0) return false;
+
+	float t0 = (-b + sqrt(d)) / (float)2;
+	float t1 = (-b - sqrt(d)) / (float)2;
+
+	if (!GreaterThanZero(t0)) {
+		if (!GreaterThanZero(t1)) {
+			return false;
+		}
+		else {
+			hitInfo.distance = t1;
+		}
+	}
+	else {
+		if (!GreaterThanZero(t1)) {
+			hitInfo.distance = t0;
+		}
+		else {
+			hitInfo.distance = std::fmin(t0, t1);
+		}
+	}
+
+	//Note: We don't need to set RaycastHitInfo triangle or sphere here because intersect scene will do that
+	//Calculate hit point and normal, sphere's normal is just interpolated normal
+	hitInfo.hitPoint = ray.origin + (ray.direction * hitInfo.distance);
+	hitInfo.normal = hitInfo.hitPoint - sphere.position;
+	hitInfo.normal.normalize();
+}
+
 
 bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 	RaycastHitInfo closestHit;

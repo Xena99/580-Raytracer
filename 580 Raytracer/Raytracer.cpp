@@ -333,25 +333,45 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 	for (Shape& m : mScene->shapes) {
 		Mesh* mesh = mScene->meshMap[m.geometryId];
 
-		//Todo: Compute model matrix from the current shape's transformation
+		//Compute model matrix from the current shape's transformation
 		Matrix modelMatrix = ComputeModelMatrix(m.transforms);
 
-		for (Triangle& tri : mesh->triangles) {
-			RaycastHitInfo tempInfo;
-			if (IntersectTriangle(ray, tri, tempInfo, modelMatrix)) {
-				if (!hasFoundHit) {
-					hasFoundHit = true;
-					closestHit = tempInfo;
-					closestHit.triangle = &tri;
-				}
-				else {
-					if (tempInfo.distance < closestHit.distance) {
+		//Handle different types of mesh, polygon uses triangles where sphere is implicit
+		if (mesh->type == Mesh::RT_POLYGON) {
+			for (Triangle& tri : mesh->triangles) {
+				RaycastHitInfo tempInfo;
+				if (IntersectTriangle(ray, tri, tempInfo, modelMatrix)) {
+					if (!hasFoundHit) {
+						hasFoundHit = true;
 						closestHit = tempInfo;
 						closestHit.triangle = &tri;
+					}
+					else {
+						if (tempInfo.distance < closestHit.distance) {
+							closestHit = tempInfo;
+							closestHit.triangle = &tri;
+						}
 					}
 				}
 			}
 		}
+		else if (mesh->type == Mesh::RT_SPHERE) {
+			RaycastHitInfo tempInfo;
+			if (IntersectSphere(ray, mesh->sphere, tempInfo, modelMatrix)) {
+				if (!hasFoundHit) {
+					hasFoundHit = true;
+					closestHit = tempInfo;
+					closestHit.sphere = &mesh->sphere;
+				}
+				else {
+					if (tempInfo.distance < closestHit.distance) {
+						closestHit = tempInfo;
+						closestHit.sphere = &mesh->sphere;
+					}
+				}
+			}
+		}
+
 	}
 
 	if (!hasFoundHit) return false;

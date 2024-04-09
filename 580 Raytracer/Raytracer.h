@@ -367,7 +367,14 @@ public:
 	};
 
 	struct Mesh {
+		enum Type {
+			RT_POLYGON,
+			RT_SPHERE
+		};
+
+		Mesh::Type type;
 		std::vector<Triangle> triangles;
+		Sphere sphere;
 	};
 
 	//Todo: need this later for generating ray

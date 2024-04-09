@@ -117,9 +117,21 @@ float Raytracer::Clipf(float input, int min, int max) {
 Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light) {
 	//Retrieve triangle material
 	const Material& material = mScene->shapes[hitInfo.triangle->shapeId].material;
-	Vector3 triVertNormals[3] = { hitInfo.triangle->v0.vertexNormal, hitInfo.triangle->v1.vertexNormal , hitInfo.triangle->v2.vertexNormal };
-	//Interpolated normal
-	Vector3 _normal = InterpolateVector3(triVertNormals, hitInfo.alpha, hitInfo.beta, hitInfo.gamma, true);
+
+	//Assign normal to use for lighting based on mesh type
+	Vector3 _normal;
+	switch (hitInfo.type) {
+	case Mesh::RT_POLYGON:
+		Vector3 triVertNormals[3] = { hitInfo.triangle->v0.vertexNormal, hitInfo.triangle->v1.vertexNormal , hitInfo.triangle->v2.vertexNormal };
+		//Interpolated normal
+		_normal = InterpolateVector3(triVertNormals, hitInfo.alpha, hitInfo.beta, hitInfo.gamma, true);
+		break;
+
+	case Mesh::RT_SPHERE:
+		_normal = hitInfo.normal;
+		break;
+	}
+
 
 	//Lighting = ambient + diffuse + specular
 	Vector3 lighting;

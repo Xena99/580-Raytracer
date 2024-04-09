@@ -20,10 +20,10 @@ class Raytracer {
 	struct Matrix;
 	struct Pixel;
 	struct Display;
+	struct Mesh;
 	struct RaycastHitInfo;
 	struct Ray;
 	struct Vertex;
-	struct Mesh;
 	struct Camera;
 	struct Light;
 	struct Transformation;
@@ -319,17 +319,6 @@ public:
 		int xRes, yRes;
 	};
 
-	struct RaycastHitInfo {
-		Vector3 hitPoint;
-		Vector3 normal;
-		float distance;
-		Triangle* triangle;
-		Sphere* sphere;
-		float alpha;
-		float beta;
-		float gamma;
-	};
-
 	struct Ray {
 		Ray() {};
 		Vector3 origin; //World space
@@ -377,6 +366,17 @@ public:
 		Sphere sphere;
 	};
 
+	struct RaycastHitInfo {
+		Mesh::Type type;
+		Vector3 hitPoint;
+		Vector3 normal;
+		float distance;
+		Triangle* triangle;
+		Sphere* sphere;
+		float alpha;
+		float beta;
+		float gamma;
+	};
 	//Todo: need this later for generating ray
 	//Perspective & Camera
 	struct Camera

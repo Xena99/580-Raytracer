@@ -112,7 +112,12 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 		Pixel finalRefractionColor = refractionColor * _kt * material.Kt;
 
 		// Combine local color, reflection, and refraction
-		localColor = localColor * (material.Kd) + finalReflectionColor + finalRefractionColor;
+		float albedoColorFactor = 1 - material.Ks - material.Kt;
+		if (albedoColorFactor < 0) {
+			albedoColorFactor = 0;
+		}
+		//localColor = localColor * albedoColorFactor + finalReflectionColor + finalRefractionColor;
+		localColor = (localColor * material.Kd) + finalReflectionColor + finalRefractionColor;
 	}
 
 	return localColor.clamp();
@@ -183,7 +188,7 @@ Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector
 
 	float angle = 1 - refractRay * refractRay * (1 - NdotI * NdotI);
 
-	if (angle < 0) {
+	if (angle < EPSILON) {
 		// Total internal reflection
 		Vector3 reflectionDir = Vector3::reflect(I, N);
 		reflectionDir.normalize();

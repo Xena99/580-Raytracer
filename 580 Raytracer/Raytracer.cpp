@@ -333,8 +333,22 @@ bool Raytracer::IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHit
 
 	//Note: We don't need to set RaycastHitInfo triangle or sphere here because intersect scene will do that
 	//Calculate hit point and normal, sphere's normal is just interpolated normal
+	//Object space hit point, need to transform to world space
 	hitInfo.hitPoint = ray.origin + (ray.direction * hitInfo.distance);
+	hitInfo.hitPoint = modelMatrix.TransformPoint(hitInfo.hitPoint);
+
+	//Normal needs to use inverse transpose of the model matrix
+	Matrix inverseTransposeModel;
+	if (RT_FAILURE == Matrix::InverseAndTranspose(modelMatrix, inverseTransposeModel)) {
+		std::cerr << "Failure during matrix inverse transpose calculation of model matrix";
+		return false;
+	}
+
+	//Normal need to transform with inverse transpose to correct shearing
 	hitInfo.normal = hitInfo.hitPoint - sphere.position;
+	hitInfo.normal.normalize();
+
+	hitInfo.normal = inverseTransposeModel.TransformPoint(hitInfo.normal);
 	hitInfo.normal.normalize();
 }
 
@@ -469,29 +483,30 @@ int Raytracer::LoadMesh(const std::string meshName, const int shapeId) {
 	file >> jsonData;
 
 	Mesh* mesh = new Mesh();
-	for (const auto& item : jsonData["data"]) {
-		Triangle triangle;
-		// Parse vertices
-		for (int i = 0; i < 3; ++i) {
-			std::string vertexKey = "v" + std::to_string(i);
-			Vector3 pos = { item[vertexKey]["v"][0], item[vertexKey]["v"][1], item[vertexKey]["v"][2] };
-			Vector3 norm = { item[vertexKey]["n"][0], item[vertexKey]["n"][1], item[vertexKey]["n"][2] };
-			Vector2 tex = { item[vertexKey]["t"][0], item[vertexKey]["t"][1] };
+	jsonData.
+		for (const auto& item : jsonData["data"]) {
+			Triangle triangle;
+			// Parse vertices
+			for (int i = 0; i < 3; ++i) {
+				std::string vertexKey = "v" + std::to_string(i);
+				Vector3 pos = { item[vertexKey]["v"][0], item[vertexKey]["v"][1], item[vertexKey]["v"][2] };
+				Vector3 norm = { item[vertexKey]["n"][0], item[vertexKey]["n"][1], item[vertexKey]["n"][2] };
+				Vector2 tex = { item[vertexKey]["t"][0], item[vertexKey]["t"][1] };
 
-			Vertex vertex;
-			vertex.vertexPos = pos;
-			vertex.vertexNormal = norm;
-			vertex.texture = tex;
+				Vertex vertex;
+				vertex.vertexPos = pos;
+				vertex.vertexNormal = norm;
+				vertex.texture = tex;
 
-			switch (i) {
-			case 0: triangle.v0 = vertex; break;
-			case 1: triangle.v1 = vertex; break;
-			case 2: triangle.v2 = vertex; break;
+				switch (i) {
+				case 0: triangle.v0 = vertex; break;
+				case 1: triangle.v1 = vertex; break;
+				case 2: triangle.v2 = vertex; break;
+				}
 			}
+			triangle.shapeId = shapeId;
+			mesh->triangles.push_back(triangle);
 		}
-		triangle.shapeId = shapeId;
-		mesh->triangles.push_back(triangle);
-	}
 
 	mScene->meshMap[meshName] = mesh;
 	return RT_SUCCESS;

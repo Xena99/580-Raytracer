@@ -193,6 +193,13 @@ public:
 			return result;
 		}
 
+		Vector3 TransformDirection(const Vector3& direction) const {
+			float x = m[0][0] * direction.x + m[0][1] * direction.y + m[0][2] * direction.z;
+			float y = m[1][0] * direction.x + m[1][1] * direction.y + m[1][2] * direction.z;
+			float z = m[2][0] * direction.x + m[2][1] * direction.y + m[2][2] * direction.z;
+			return Vector3(x, y, z);
+		}
+
 		Vector3 TransformPoint(const Vector3& point) const {
 			float x = m[0][0] * point.x + m[0][1] * point.y + m[0][2] * point.z + m[0][3];
 			float y = m[1][0] * point.x + m[1][1] * point.y + m[1][2] * point.z + m[1][3];
@@ -275,6 +282,24 @@ public:
 				result.m[i][3] = invMatrix.m[i][3]; // Copy the translation column
 			}
 			result.m[3][3] = 1.0f; // Set the homogeneous coordinate to 1
+
+			return RT_SUCCESS;
+		}
+
+		static int Inverse(const Matrix& matrix, Matrix& result) {
+			float det = Determinant(matrix);
+			if (fabs(det) < 1e-10) {
+				return RT_FAILURE;  // Early exit if the matrix is singular or nearly so
+			}
+
+			Matrix adjoint;
+			Adjoint(matrix, adjoint);
+
+			for (int i = 0; i < 4; i++) {
+				for (int j = 0; j < 4; j++) {
+					result.m[i][j] = adjoint.m[i][j] / det;
+				}
+			}
 
 			return RT_SUCCESS;
 		}

@@ -86,7 +86,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 	}
 
 	//Clamp the color so far after light contributions are added
-	localColor.clamp();
+	return localColor.clamp();
 
 	if (material.Ks > 0) {
 		// Calculate reflection ray
@@ -156,7 +156,7 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	Vector3 _ambient = mScene->ambient.color * mScene->ambient.intensity;
 
 	//Diffuse
-	Vector3 lightVector = light.direction * -1;
+	Vector3 lightVector = light.direction;
 	lightVector.normalize();
 
 	float diffuseStrength = fmax(lightVector.dot(_normal), 0);
@@ -320,57 +320,54 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 /// <param name="modelMatrix"></param>
 /// <returns></returns>
 bool Raytracer::IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHitInfo& hitInfo, const Matrix& modelMatrix) {
-	float a = 1.0f;
+	// Compute the inverse of the model matrix for transforming the ray
+	Matrix inverseModelMatrix;
+	Matrix::Inverse(modelMatrix, inverseModelMatrix);
 
-	//Ray origin - sphere center
-	Vector3 oc = ray.origin - sphere.position;
-	float b = 2.0 * (Vector3::dot(ray.direction, oc));
-	float c = (Vector3::dot(oc, oc) - (sphere.radius * sphere.radius));
-	//b^2 - 4ac: discriminant
-	float d = (b * b) - (4 * a * c);
-	if (d < 0) return false;
+	// Transform the ray into the object's local space
+	Vector3 localRayOrigin = inverseModelMatrix.TransformPoint(ray.origin);
+	Vector3 localRayDirection = inverseModelMatrix.TransformDirection(ray.direction);  // Use TransformDirection
+	localRayDirection.normalize();
 
-	float t0 = (-b + sqrt(d)) / (float)2;
-	float t1 = (-b - sqrt(d)) / (float)2;
+	// In object space, the sphere is at its local origin, so we can simplify the intersection calculation
+	Vector3 oc = localRayOrigin;  // Sphere center is at local origin after transformation, so no need to subtract its position
+	float a = 1.0f;  // Since localRayDirection is normalized
+	float b = 2.0f * Vector3::dot(localRayDirection, oc);
+	float c = Vector3::dot(oc, oc) - (sphere.radius * sphere.radius);
 
-	if (!GreaterThanZero(t0)) {
-		if (!GreaterThanZero(t1)) {
-			return false;
-		}
-		else {
-			hitInfo.distance = t1;
-		}
-	}
-	else {
-		if (!GreaterThanZero(t1)) {
-			hitInfo.distance = t0;
-		}
-		else {
-			hitInfo.distance = std::fmin(t0, t1);
-		}
+	// Calculate the discriminant for the quadratic equation
+	float discriminant = b * b - 4 * a * c;
+	if (discriminant < 0) return false;  // No intersection
+
+	float sqrtDiscriminant = sqrt(discriminant);
+	float t0 = (-b + sqrtDiscriminant) / (2 * a);
+	float t1 = (-b - sqrtDiscriminant) / (2 * a);
+
+	if (!GreaterThanZero(t0) && !GreaterThanZero(t1)) {
+		return false;  // Both intersections are behind the ray origin
 	}
 
-	//Note: We don't need to set RaycastHitInfo triangle or sphere here because intersect scene will do that
-	//Calculate hit point and normal, sphere's normal is just interpolated normal
-	//Object space hit point, need to transform to world space
-	hitInfo.hitPoint = ray.origin + (ray.direction * hitInfo.distance);
-	hitInfo.hitPoint = modelMatrix.TransformPoint(hitInfo.hitPoint);
+	// Find the nearest positive intersection
+	hitInfo.distance = (GreaterThanZero(t0) && (!GreaterThanZero(t1) || t0 < t1)) ? t0 : t1;
 
-	//Normal needs to use inverse transpose of the model matrix
-	Matrix inverseTransposeModel;
-	if (RT_FAILURE == Matrix::InverseAndTranspose(modelMatrix, inverseTransposeModel)) {
-		std::cerr << "Failure during matrix inverse transpose calculation of model matrix";
-		return false;
-	}
+	// Calculate hit point and normal in local space
+	Vector3 localHitPoint = localRayOrigin + localRayDirection * hitInfo.distance;
+	Vector3 localNormal = localHitPoint;  // The normal is the vector from the center to the hit point
+	localNormal.normalize();
 
-	//Normal need to transform with inverse transpose to correct shearing
+	// Transform the hit point and normal back to world space
+	hitInfo.hitPoint = modelMatrix.TransformPoint(localHitPoint);
+
+	// Use the InverseTranspose() function for normal transformation to handle non-uniform scaling
+	Matrix inverseTransposeMatrix;
+	Matrix::InverseAndTranspose(modelMatrix, inverseTransposeMatrix);
+	hitInfo.normal = inverseTransposeMatrix.TransformDirection(localNormal);  // Should be TransformDirection for normals
+	hitInfo.normal.normalize();
+
 	hitInfo.type = Mesh::RT_SPHERE;
-	hitInfo.normal = hitInfo.hitPoint - sphere.position;
-	hitInfo.normal.normalize();
-
-	hitInfo.normal = inverseTransposeModel.TransformPoint(hitInfo.normal);
-	hitInfo.normal.normalize();
+	return true;
 }
+
 
 
 bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {

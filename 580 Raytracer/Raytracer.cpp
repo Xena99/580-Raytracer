@@ -31,27 +31,23 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 		return BG_COLOR; // No hit, return background color
 	}
 
+	const Material& material = *info.material;
 	Pixel localColor = SHADOW_COLOR;
-
-	//Check if the material is reflective
-	int shapeId = -1;
-	switch (info.type) {
-	case Mesh::RT_POLYGON:
-		shapeId = info.triangle->shapeId;
-		break;
-
-	case Mesh::RT_SPHERE:
-		shapeId = info.sphere->shapeId;
-		break;
-	}
-
-	const Material& material = mScene->shapes[shapeId].material;
 
 	//Loop through all light sources and determine if pixel is occluded from it
 	//If is, no contribution added, else compute local Phong lighting and add the contribution
 	for (Light& light : mScene->lights) {
-		//Skip ambient light
-		if (light.lightType == Light::Ambient) continue;
+		//Calculate ambient light
+		if (light.lightType == Light::Ambient) {
+			Vector3 _ambientColor = light.color * material.Ka * light.intensity;
+			_ambientColor.x = Clipf(_ambientColor.x, 0, 1);
+			_ambientColor.y = Clipf(_ambientColor.y, 0, 1);
+			_ambientColor.z = Clipf(_ambientColor.z, 0, 1);
+
+			// Convert to Pixel format, conversion clamps for you
+			Pixel _ambientCol(_ambientColor);
+			localColor = localColor + _ambientCol;
+		}
 
 		//Compute the direction to light (hit point to light)
 		//Directional light dir is already stored
@@ -82,7 +78,6 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 	}
 	//Clamp the color so far after light contributions are added
 	localColor.clamp();
-
 	//If we have bounces left, calculate reflection and refraction
 	if (bounces > 0) {
 		float _kt;
@@ -117,7 +112,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 		Pixel finalRefractionColor = refractionColor * _kt * material.Kt;
 
 		// Combine local color, reflection, and refraction
-		localColor = localColor * (1 - material.Ks - material.Kt) + finalReflectionColor + finalRefractionColor;
+		localColor = localColor * (material.Kd) + finalReflectionColor + finalRefractionColor;
 	}
 
 	return localColor.clamp();
@@ -249,9 +244,8 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	}
 	}
 
-	//Lighting = ambient + diffuse + specular
+	//Lighting = diffuse + specular
 	Vector3 lighting;
-	Vector3 _ambient = mScene->ambient.color * mScene->ambient.intensity;
 
 	float diffuseStrength = fmax(lightVector.dot(_normal), 0);
 	Vector3 _diffuse = light.color * diffuseStrength * light.intensity;
@@ -267,7 +261,7 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	specularStrength = std::powf(specularStrength, material.specularExponet);
 	Vector3 _specular = light.color * specularStrength * light.intensity;
 
-	lighting = _ambient * material.Ka + _diffuse * material.Kd + _specular * material.Ks;
+	lighting = _diffuse * material.Kd + _specular * material.Ks;
 
 	Vector3 color = material.surfaceColor * lighting;
 
@@ -471,7 +465,12 @@ bool Raytracer::IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHit
 }
 
 
-
+/// <summary>
+/// Loops through all shape in scene to test intersection, sets material properties because that's a property within shape
+/// </summary>
+/// <param name="ray"></param>
+/// <param name="hitInfo"></param>
+/// <returns></returns>
 bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 	RaycastHitInfo closestHit;
 	bool hasFoundHit = false;
@@ -490,11 +489,13 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 						hasFoundHit = true;
 						closestHit = tempInfo;
 						closestHit.triangle = &tri;
+						closestHit.material = &m.material;
 					}
 					else {
 						if (tempInfo.distance < closestHit.distance) {
 							closestHit = tempInfo;
 							closestHit.triangle = &tri;
+							closestHit.material = &m.material;
 						}
 					}
 				}
@@ -507,11 +508,13 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 					hasFoundHit = true;
 					closestHit = tempInfo;
 					closestHit.sphere = &mesh->sphere;
+					closestHit.material = &m.material;
 				}
 				else {
 					if (tempInfo.distance < closestHit.distance) {
 						closestHit = tempInfo;
 						closestHit.sphere = &mesh->sphere;
+						closestHit.material = &m.material;
 					}
 				}
 			}
@@ -585,7 +588,7 @@ Raytracer::Matrix Raytracer::ComputeModelMatrix(const Raytracer::Transformation&
 }
 
 //////Helper Functions//////
-int Raytracer::LoadMesh(const std::string meshName, const int shapeId) {
+int Raytracer::LoadMesh(const std::string meshName) {
 	auto it = mScene->meshMap.find(meshName);
 	if (it != mScene->meshMap.end()) {
 		std::cout << "Mesh map already contains " << meshName << ". Skipped loading" << std::endl;
@@ -625,13 +628,11 @@ int Raytracer::LoadMesh(const std::string meshName, const int shapeId) {
 				case 2: triangle.v2 = vertex; break;
 				}
 			}
-			triangle.shapeId = shapeId;
 			mesh->triangles.push_back(triangle);
 		}
 		else if (shapeType == "sphere") {
 			mesh->type = Mesh::RT_SPHERE;
 			Sphere sphere;
-			sphere.shapeId = shapeId;
 
 			Vector3 center = { item["center"][0], item["center"][1], item["center"][2] };
 			float radius = item["radius"];
@@ -719,7 +720,7 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 
 				mScene->shapes.push_back(shape);
 				//Auto load into mesh map
-				status |= LoadMesh(shape.geometryId, mScene->shapes.size() - 1);
+				status |= LoadMesh(shape.geometryId);
 			}
 		}
 

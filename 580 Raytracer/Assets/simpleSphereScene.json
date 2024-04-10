@@ -25,8 +25,8 @@
           "Cs": [ 0, 1, 0 ],
           "Ka": 0.5,
           "Kd": 0.75,
-          "Ks": 0.6,
-          "Kt": 0.6,
+          "Ks": 0.2,
+          "Kt": 0.1,
           "n": 2.0
         },
         "transforms": [
@@ -54,7 +54,7 @@
         "id": "sphereback",
         "geometry": "1sphere",
         "material": {
-          "Cs": [ 1, 0, 0 ],
+          "Cs": [ 0, 0, 1 ],
           "Ka": 0.5,
           "Kd": 0.75,
           "Ks": 0.3,
@@ -70,11 +70,11 @@
         "id": "sphereback2",
         "geometry": "1sphere",
         "material": {
-          "Cs": [ 1, 0, 0 ],
+          "Cs": [ 0, 1, 0 ],
           "Ka": 0.5,
           "Kd": 0.75,
-          "Ks": 0,
-          "Kt": 0,
+          "Ks": 0.5,
+          "Kt": 0.5,
           "n": 2.0
         },
         "transforms": [

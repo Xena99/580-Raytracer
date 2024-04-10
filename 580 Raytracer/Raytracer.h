@@ -309,6 +309,12 @@ public:
 	struct Pixel {
 		short r, g, b;
 
+		Pixel(const Vector3& vec) {
+			r = static_cast<short>(vec.x * 255);
+			g = static_cast<short>(vec.y * 255);
+			b = static_cast<short>(vec.z * 255);
+			clamp();
+		}
 		Pixel(short _r, short _g, short _b) : r(_r), g(_g), b(_b) {}
 
 		Pixel() : r(0), g(0), b(0) {}
@@ -394,13 +400,11 @@ public:
 		Vertex v0;
 		Vertex v1;
 		Vertex v2;
-		int shapeId;
 	};
 
 	struct Sphere {
 		Vector3 position;
 		float radius;
-		int shapeId;
 	};
 
 	struct Mesh {
@@ -421,6 +425,7 @@ public:
 		float distance;
 		Triangle* triangle;
 		Sphere* sphere;
+		Material* material;
 		float alpha;
 		float beta;
 		float gamma;
@@ -481,7 +486,6 @@ public:
 		std::unordered_map<std::string, Mesh*> meshMap;
 		std::vector<Light> lights;
 		Light directional;
-		Light ambient;
 	};
 
 	bool NearlyEquals(float a, float b);
@@ -498,7 +502,7 @@ public:
 	bool IntersectTriangle(const Ray& ray, const Triangle& triangle, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
 	bool IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
 	bool IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo);
-	int LoadMesh(const std::string meshName, const int shapeId);
+	int LoadMesh(const std::string meshName);
 	int LoadSceneJSON(const std::string scenePath);
 	int FlushFrameBufferToPPM(std::string outputName);
 	Matrix ComputeModelMatrix(const Transformation& transform);

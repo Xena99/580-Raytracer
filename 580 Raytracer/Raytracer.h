@@ -120,6 +120,45 @@ public:
 			Vector3 _N = N * IDotN;
 			return I - _N;
 		}
+
+		//indexMedium1 is the medium before the refractive material. This is typically air with its indexM1=1
+		//indexMedium2 is the medium the ray enters that refracts the ray. (indexM2)
+		static Vector3 refraction(const Vector3& I, const Vector3& N, const float& indexM2) {
+			Vector3 referenceN = N;
+			float NdotI = N.dot(I);
+			float indexM1 = 1; //hard coding using air as default
+			float indexM2ref = indexM2;
+			if (NdotI < 0) {
+				NdotI = -NdotI;
+			}
+			else {
+				referenceN = -N;
+				//have to swap index of refractions
+				std::swap(indexM1, indexM2ref);
+			}
+
+			float refractRay = indexM1 / indexM2ref;
+
+			//clamp NdotI between -1 and 1
+			if (NdotI > 1) {
+				NdotI = 1;
+			}
+			else if (NdotI < -1) {
+				NdotI = -1;
+			}
+
+			float angle = 1 - refractRay * refractRay * (1 - NdotI * NdotI);
+
+			if (angle < 0) {
+				return 0;
+			}
+			else {
+				return I * refractRay + referenceN * (refractRay * NdotI - sqrtf(angle));
+			}
+
+
+
+		}
 	};
 
 	struct Vector2 {

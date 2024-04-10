@@ -8,6 +8,7 @@
 #define RT_FAILURE      1
 #define RT_INVALID_ARG  2
 #define PI 3.14159265
+#define EPSILON 0.0001
 
 const std::string ASSETS_PATH = "Assets/";
 
@@ -119,45 +120,6 @@ public:
 			IDotN *= 2;
 			Vector3 _N = N * IDotN;
 			return I - _N;
-		}
-
-		//indexMedium1 is the medium before the refractive material. This is typically air with its indexM1=1
-		//indexMedium2 is the medium the ray enters that refracts the ray. (indexM2)
-		static Vector3 refraction(const Vector3& I, const Vector3& N, const float& indexM2) {
-			Vector3 referenceN = N;
-			float NdotI = N.dot(I);
-			float indexM1 = 1; //hard coding using air as default
-			float indexM2ref = indexM2;
-			if (NdotI < 0) {
-				NdotI = -NdotI;
-			}
-			else {
-				referenceN = -N;
-				//have to swap index of refractions
-				std::swap(indexM1, indexM2ref);
-			}
-
-			float refractRay = indexM1 / indexM2ref;
-
-			//clamp NdotI between -1 and 1
-			if (NdotI > 1) {
-				NdotI = 1;
-			}
-			else if (NdotI < -1) {
-				NdotI = -1;
-			}
-
-			float angle = 1 - refractRay * refractRay * (1 - NdotI * NdotI);
-
-			if (angle < 0) {
-				return 0;
-			}
-			else {
-				return I * refractRay + referenceN * (refractRay * NdotI - sqrtf(angle));
-			}
-
-
-
 		}
 	};
 
@@ -402,9 +364,21 @@ public:
 		float Kd;
 		float Ks;
 		float Kt;
+		float refractiveIndex;
 		float specularExponet;
 		//For now no texture, just material color
 		std::string textureId;
+
+		//Update default constructor
+		Material()
+			: surfaceColor(1.0, 1.0, 1.0), // default white color
+			Ka(0.1f), // ambient reflection coefficient
+			Kd(0.7f), // diffuse reflection coefficient
+			Ks(0.5f), // specular reflection coefficient
+			Kt(0.0f), // transparency coefficient
+			refractiveIndex(1.5), // refractive index, like glass
+			specularExponet(32.0f), // specular highlight size
+			textureId("") {} // default no texture
 	};
 
 	struct Triangle {
@@ -506,7 +480,8 @@ public:
 		return value > EPSILON;
 	}
 	//Returns the pixel value to directly put in frame buffer
-	Pixel Raycast(Ray& ray, int depth);
+	//Bounces affect how many times the rays recursively "bounce"
+	Pixel Raycast(Ray& ray, int bounces = 5);
 
 
 	//Helper ray cast functions
@@ -520,6 +495,7 @@ public:
 	Matrix ComputeModelMatrix(const Transformation& transform);
 	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light, const Material& material);
 	Pixel MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight);
+	Vector3 CalculateRefraction(const Vector3& I, const Vector3& N, const float& indexM2);
 	Vector3 RandomUnitVector();
 	Vector3 RandomInHemisphere(const Raytracer::Vector3& normal);
 	float CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, const Raytracer::Vector3& normal);
@@ -534,7 +510,6 @@ public:
 
 
 private:
-	const float EPSILON = 1e-6;
 	Scene* mScene = nullptr;
 	Display* mDisplay;
 

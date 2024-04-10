@@ -71,7 +71,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 			lightDir.normalize();
 		}
 		//Make new ray from intersection point to light source
-		Ray lightRay(info.hitPoint, light.direction);
+		Ray lightRay(info.hitPoint, lightDir);
 		RaycastHitInfo lightInfo;
 
 		//For directional light, this value is not used as directional light doesn't have position property
@@ -135,6 +135,15 @@ float Raytracer::Clipf(float input, int min, int max) {
 /// <param name="material"></param>
 /// <returns></returns>
 Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light, const Material& material) {
+	Vector3 lightVector;
+	if (light.lightType == Light::Point) {
+		lightVector = light.position - hitInfo.hitPoint; // From hit point to light source
+		lightVector.normalize(); // It's important to normalize the direction
+	}
+	else {
+		lightVector = light.direction * -1; // For directional lights
+		lightVector.normalize();
+	}
 	//Assign normal to use for lighting based on mesh type
 	Vector3 _normal;
 	switch (hitInfo.type) {
@@ -150,14 +159,9 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	}
 	}
 
-
 	//Lighting = ambient + diffuse + specular
 	Vector3 lighting;
 	Vector3 _ambient = mScene->ambient.color * mScene->ambient.intensity;
-
-	//Diffuse
-	Vector3 lightVector = light.direction;
-	lightVector.normalize();
 
 	float diffuseStrength = fmax(lightVector.dot(_normal), 0);
 	Vector3 _diffuse = light.color * diffuseStrength * light.intensity;
@@ -839,7 +843,7 @@ int main() {
 
 	//Do ray tracing
 	Raytracer rt(250, 250);
-	rt.LoadSceneJSON("scene.json");
+	rt.LoadSceneJSON("simpleSphereScene.json");
 	rt.Render("output.ppm");
 	auto stopTime = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);

@@ -132,15 +132,16 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	//Assign normal to use for lighting based on mesh type
 	Vector3 _normal;
 	switch (hitInfo.type) {
-	case Mesh::RT_POLYGON:
+	case Mesh::RT_POLYGON: {
 		Vector3 triVertNormals[3] = { hitInfo.triangle->v0.vertexNormal, hitInfo.triangle->v1.vertexNormal , hitInfo.triangle->v2.vertexNormal };
 		//Interpolated normal
 		_normal = InterpolateVector3(triVertNormals, hitInfo.alpha, hitInfo.beta, hitInfo.gamma, true);
 		break;
-
-	case Mesh::RT_SPHERE:
+	}
+	case Mesh::RT_SPHERE: {
 		_normal = hitInfo.normal;
 		break;
+	}
 	}
 
 
@@ -294,6 +295,7 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 		return false;
 	}
 
+	hitInfo.type = Mesh::RT_POLYGON;
 	hitInfo.normal = inverseTransposeModel.TransformPoint(planeNormal);
 	hitInfo.normal.normalize();
 	hitInfo.distance = t;
@@ -356,6 +358,7 @@ bool Raytracer::IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHit
 	}
 
 	//Normal need to transform with inverse transpose to correct shearing
+	hitInfo.type = Mesh::RT_SPHERE;
 	hitInfo.normal = hitInfo.hitPoint - sphere.position;
 	hitInfo.normal.normalize();
 
@@ -825,7 +828,7 @@ int main() {
 
 	//Do ray tracing
 	Raytracer rt(250, 250);
-	rt.LoadSceneJSON("scene.json");
+	rt.LoadSceneJSON("simpleSphereScene.json");
 	rt.Render("output.ppm");
 	auto stopTime = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);

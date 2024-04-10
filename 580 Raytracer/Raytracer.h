@@ -353,6 +353,7 @@ public:
 	struct Sphere {
 		Vector3 position;
 		float radius;
+		int shapeId;
 	};
 
 	struct Mesh {

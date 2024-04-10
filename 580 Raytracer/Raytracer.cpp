@@ -75,7 +75,18 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 	localColor.clamp();
 
 	//Check if the material is reflective
-	const Material& material = mScene->shapes[info.triangle->shapeId].material;
+	int shapeId = -1;
+	switch (info.type) {
+	case Mesh::RT_POLYGON:
+		shapeId = info.triangle->shapeId;
+		break;
+
+	case Mesh::RT_SPHERE:
+		shapeId = info.sphere->shapeId;
+		break;
+	}
+
+	const Material& material = mScene->shapes[shapeId].material;
 	if (material.Ks > 0) {
 		// Calculate reflection ray
 		Vector3 reflectionRayDir = Vector3::reflect(ray.direction, info.normal);
@@ -483,8 +494,10 @@ int Raytracer::LoadMesh(const std::string meshName, const int shapeId) {
 	file >> jsonData;
 
 	Mesh* mesh = new Mesh();
-	jsonData.
-		for (const auto& item : jsonData["data"]) {
+	for (const auto& item : jsonData["data"]) {
+		std::string shapeType = item["type"];
+		if (shapeType == "polygon") {
+			mesh->type = Mesh::RT_POLYGON;
 			Triangle triangle;
 			// Parse vertices
 			for (int i = 0; i < 3; ++i) {
@@ -507,6 +520,18 @@ int Raytracer::LoadMesh(const std::string meshName, const int shapeId) {
 			triangle.shapeId = shapeId;
 			mesh->triangles.push_back(triangle);
 		}
+		else if (shapeType == "sphere") {
+			mesh->type = Mesh::RT_SPHERE;
+			Sphere sphere;
+			sphere.shapeId = shapeId;
+
+			Vector3 center = { item["center"][0], item["center"][1], item["center"][2] };
+			float radius = item["radius"];
+			sphere.position = center;
+			sphere.radius = radius;
+			mesh->sphere = sphere;
+		}
+	}
 
 	mScene->meshMap[meshName] = mesh;
 	return RT_SUCCESS;

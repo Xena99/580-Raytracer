@@ -454,7 +454,7 @@ public:
 	int LoadSceneJSON(const std::string scenePath);
 	int FlushFrameBufferToPPM(std::string outputName);
 	Matrix ComputeModelMatrix(const Transformation& transform);
-	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light);
+	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light, const Material& material);
 	Pixel MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight);
 	Vector3 RandomUnitVector();
 	Vector3 RandomInHemisphere(const Raytracer::Vector3& normal);

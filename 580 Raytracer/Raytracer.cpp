@@ -37,6 +37,20 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 
 	Pixel localColor = Pixel(0, 0, 0);
 
+	//Check if the material is reflective
+	int shapeId = -1;
+	switch (info.type) {
+	case Mesh::RT_POLYGON:
+		shapeId = info.triangle->shapeId;
+		break;
+
+	case Mesh::RT_SPHERE:
+		shapeId = info.sphere->shapeId;
+		break;
+	}
+
+	const Material& material = mScene->shapes[shapeId].material;
+
 	//Loop through all light sources and determine if pixel is occluded from it
 	//If is, no contribution added, else compute local Phong lighting and add the contribution
 	for (Light& light : mScene->lights) {
@@ -67,26 +81,13 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 		//If intersection is past the distance to light, then means it's behind light, thus still contribution
 		if (!IntersectScene(lightRay, lightInfo) || (lightInfo.distance > distToLight && light.lightType == Light::Point)) {
 			// Calculate local color using Phong lighting or other shading model
-			localColor = localColor + CalculateLocalColor(info, light);
+			localColor = localColor + CalculateLocalColor(info, light, material);
 		}
 	}
 
 	//Clamp the color so far after light contributions are added
 	localColor.clamp();
 
-	//Check if the material is reflective
-	int shapeId = -1;
-	switch (info.type) {
-	case Mesh::RT_POLYGON:
-		shapeId = info.triangle->shapeId;
-		break;
-
-	case Mesh::RT_SPHERE:
-		shapeId = info.sphere->shapeId;
-		break;
-	}
-
-	const Material& material = mScene->shapes[shapeId].material;
 	if (material.Ks > 0) {
 		// Calculate reflection ray
 		Vector3 reflectionRayDir = Vector3::reflect(ray.direction, info.normal);
@@ -125,10 +126,15 @@ float Raytracer::Clipf(float input, int min, int max) {
 	return input;
 }
 
-Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light) {
-	//Retrieve triangle material
-	const Material& material = mScene->shapes[hitInfo.triangle->shapeId].material;
 
+/// <summary>
+/// Computes Phong Lighting for pixel coloring
+/// </summary>
+/// <param name="hitInfo"></param>
+/// <param name="light"></param>
+/// <param name="material"></param>
+/// <returns></returns>
+Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light, const Material& material) {
 	//Assign normal to use for lighting based on mesh type
 	Vector3 _normal;
 	switch (hitInfo.type) {

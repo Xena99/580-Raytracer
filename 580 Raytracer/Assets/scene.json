@@ -13,7 +13,8 @@
           ],
           "Ka":0.5,
           "Kd":0.75,
-          "Ks":0.9,
+          "Ks": 0.9,
+          "Kt" : 0.8,
           "n":2.0
         },
         "transforms":[
@@ -40,16 +41,17 @@
         "id":"teapot2",
         "notes":"no scaling",
         "geometry":"teapot",
-        "material":{
-          "Cs":[
+        "material": {
+          "Cs": [
             0,
             1,
             0
           ],
-          "Ka":0.35,
-          "Kd":0.5,
-          "Ks":0.9,
-          "n":5.0
+          "Ka": 0.35,
+          "Kd": 0.5,
+          "Ks": 0.9,
+          "Kt": 0.8,
+          "n": 5.0
         },
         "transforms":[
           {
@@ -75,16 +77,17 @@
         "id":"teapot3",
         "notes":"",
         "geometry":"teapot",
-        "material":{
-          "Cs":[
+        "material": {
+          "Cs": [
             0,
             0,
             1
           ],
-          "Ka":0.15,
-          "Kd":0.35,
-          "Ks":0.9,
-          "n":10.0
+          "Ka": 0.15,
+          "Kd": 0.35,
+          "Ks": 0.9,
+          "Kt": 0.8,
+          "n": 10.0
         },
         "transforms":[
           {
@@ -110,16 +113,17 @@
         "id":"teapot4",
         "notes":"",
         "geometry":"teapot",
-        "material":{
-          "Cs":[
+        "material": {
+          "Cs": [
             1,
             1,
             0
           ],
-          "Ka":0.05,
-          "Kd":0.15,
-          "Ks":0.9,
-          "n":20.0
+          "Ka": 0.05,
+          "Kd": 0.15,
+          "Ks": 0.9,
+          "Kt": 0.8,
+          "n": 20.0
         },
         "transforms":[
           {

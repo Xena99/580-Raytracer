@@ -321,6 +321,15 @@ public:
 			);
 		}
 
+		Pixel operator*(float scalar) const {
+			return Pixel(
+				static_cast<short>(r * scalar),
+				static_cast<short>(g * scalar),
+				static_cast<short>(b * scalar)
+			).clamp();
+		}
+
+		// Clamp function as before
 		Pixel operator+(const Pixel& other) const {
 			return Pixel(
 				static_cast<short>(r + other.r),
@@ -499,6 +508,7 @@ public:
 	Vector3 RandomUnitVector();
 	Vector3 RandomInHemisphere(const Raytracer::Vector3& normal);
 	float CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, const Raytracer::Vector3& normal);
+	void ComputeFresnel(float indexOfRefraction, const Vector3& normal, const Vector3& incident, float& Kr, float& Kt);
 	float ToRadian(float degrees) {
 		return degrees * (PI / 180);
 	}

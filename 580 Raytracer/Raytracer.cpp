@@ -25,17 +25,13 @@ bool Raytracer::NearlyEquals(float a, float b) {
 /// <param name="hitInfo"></param>
 /// <returns></returns>
 /// The depth parameter in recursive ray tracing is used to control the maximum number of times a ray can be reflected
-Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
-	if (depth <= 0) {
-		return BG_COLOR; // Reached maximum recursion depth
-	}
-
+Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 	RaycastHitInfo info;
 	if (!IntersectScene(ray, info)) {
 		return BG_COLOR; // No hit, return background color
 	}
 
-	Pixel localColor = Pixel(0, 0, 0);
+	Pixel localColor = SHADOW_COLOR;
 
 	//Check if the material is reflective
 	int shapeId = -1;
@@ -84,32 +80,126 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int depth) {
 			localColor = localColor + CalculateLocalColor(info, light, material);
 		}
 	}
-
 	//Clamp the color so far after light contributions are added
-	return localColor.clamp();
+	localColor.clamp();
 
-	if (material.Ks > 0) {
-		// Calculate reflection ray
-		Vector3 reflectionRayDir = Vector3::reflect(ray.direction, info.normal);
-		reflectionRayDir.normalize();
-		Ray reflectionRay(info.hitPoint, reflectionRayDir);
+	//If we have bounces left, calculate reflection and refraction
+	if (bounces > 0) {
+		float _kt;
+		float _kr;
 
-		// For each hit, if the material of the hit object is reflective, 
-		// you need to trace a new ray from the hit point in the reflection direction. 
-		// This new ray will then be used to determine what the original ray "sees" in the reflection.
-		Pixel reflectionColor = Raycast(reflectionRay, depth - 1);
+		Pixel reflectionColor;
+		Pixel refractionColor;
+		// Add reflection
+		if (material.Ks > 0) {
+			// Calculate reflection ray
+			Vector3 reflectionRayDir = Vector3::reflect(ray.direction, info.normal);
+			reflectionRayDir.normalize();
+			Ray reflectionRay(info.hitPoint, reflectionRayDir);
 
-		// The color returned by the reflected ray needs to be combined with the original
-		// surface color to get the final color. 
-		// This can be done using the material's reflection coefficient.
-		localColor = MixColors(localColor, reflectionColor, material.Ks);
+			// For each hit, if the material of the hit object is reflective, 
+			// you need to trace a new ray from the hit point in the reflection direction. 
+			// This new ray will then be used to determine what the original ray "sees" in the reflection.
+			reflectionColor = Raycast(reflectionRay, bounces - 1);
+
+		}
+
+		// Add refraction
+		if (material.Kt > 0) {
+			Vector3 refractionRayDir = CalculateRefraction(ray.direction, info.normal, material.refractiveIndex);
+			Ray refractionRay(info.hitPoint, refractionRayDir);
+			refractionColor = Raycast(refractionRay, bounces - 1);
+		}
+
+		ComputeFresnel(material.refractiveIndex, info.normal, ray.direction, _kr, _kt);
+		// Blend the reflection and refraction colors based on Fresnel effect and material's reflective and transmissive properties
+		Pixel finalReflectionColor = reflectionColor * _kr * material.Ks;
+		Pixel finalRefractionColor = refractionColor * _kt * material.Kt;
+
+		// Combine local color, reflection, and refraction
+		localColor = localColor * (1 - material.Ks - material.Kt) + finalReflectionColor + finalRefractionColor;
 	}
-
-	//Todo: Add refraction
 
 	return localColor.clamp();
 }
 
+void Raytracer::ComputeFresnel(float indexOfRefraction, const Vector3& normal, const Vector3& incident, float& Kr, float& Kt) {
+	// Calculate the cosine of the angle of incidence
+	float cosi = Clipf(Vector3::dot(incident, normal), -1.0f, 1.0f);
+
+	// Check if we're inside the surface
+	bool inside = cosi > 0;
+	float eta_i = 1; // Index of refraction of the incident medium (air in this case)
+	float eta_t = indexOfRefraction; // Index of refraction of the transmitting medium (object)
+
+	// If we're inside the object, we need to invert indices of refraction
+	if (inside) {
+		std::swap(eta_i, eta_t);
+		cosi = -cosi; // Flip the sign of cosi since we're inside the surface
+	}
+
+	// Snell's law
+	float sint = eta_i / eta_t * sqrtf(std::max(0.f, 1 - cosi * cosi));
+
+	// Total internal reflection check
+	if (sint >= 1) {
+		Kr = 1; // No light passes through the surface, it's all reflected
+		Kt = 0;
+	}
+	else {
+		float cost = sqrtf(std::max(0.f, 1 - sint * sint));
+		cosi = fabsf(cosi);
+
+		// Compute Fresnel reflectance using Schlick's approximation
+		float Rs = ((eta_t * cosi) - (eta_i * cost)) / ((eta_t * cosi) + (eta_i * cost));
+		float Rp = ((eta_i * cosi) - (eta_t * cost)) / ((eta_i * cosi) + (eta_t * cost));
+		Kr = (Rs * Rs + Rp * Rp) / 2;
+
+		// Transmission is 1 - the reflectance
+		Kt = 1 - Kr;
+	}
+}
+
+//indexMedium1 is the medium before the refractive material. This is typically air with its indexM1=1
+//indexMedium2 is the medium the ray enters that refracts the ray. (indexM2)
+Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector3& N, const float& indexM2) {
+	Vector3 referenceN = N;
+	float NdotI = N.dot(I);
+	float indexM1 = 1; //hard coding using air as default
+	float indexM2ref = indexM2;
+	if (NdotI < 0) {
+		NdotI = -NdotI;
+	}
+	else {
+		referenceN = -N;
+		//have to swap index of refractions
+		std::swap(indexM1, indexM2ref);
+	}
+
+	float refractRay = indexM1 / indexM2ref;
+
+	//clamp NdotI between -1 and 1
+	if (NdotI > 1) {
+		NdotI = 1;
+	}
+	else if (NdotI < -1) {
+		NdotI = -1;
+	}
+
+	float angle = 1 - refractRay * refractRay * (1 - NdotI * NdotI);
+
+	if (angle < 0) {
+		// Total internal reflection
+		Vector3 reflectionDir = Vector3::reflect(I, N);
+		reflectionDir.normalize();
+		return reflectionDir;
+	}
+	else {
+		Vector3 reflectionDir = (I * refractRay + referenceN * (refractRay * NdotI - sqrtf(angle)));
+		reflectionDir.normalize();
+		return reflectionDir;
+	}
+}
 //color1 is the original surface color, color2 is the color returned by the reflected ray, 
 // and weight is the material's reflection coefficient (Ks). 
 Raytracer::Pixel Raytracer::MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight) {
@@ -583,8 +673,9 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 				Shape shape;
 				shape.id = shapeValue["id"];
 				shape.geometryId = shapeValue["geometry"];
-				shape.notes = shapeValue["notes"];
-
+				if (shapeValue.contains("notes")) {
+					shape.notes = shapeValue["notes"].get<std::string>();
+				}
 				//Write material
 				const auto& material = shapeValue["material"];
 				shape.material.surfaceColor.x = material["Cs"][0];
@@ -593,28 +684,38 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 				shape.material.Ka = material["Ka"];
 				shape.material.Kd = material["Kd"];
 				shape.material.Ks = material["Ks"];
+				shape.material.Kt = material["Kt"];
 				shape.material.specularExponet = material["n"];
 
 				//Write transformations
-				const auto& transforms = shapeValue["transforms"];
-				shape.transforms.scale.x = transforms[1]["S"][0];
-				shape.transforms.scale.y = transforms[1]["S"][1];
-				shape.transforms.scale.z = transforms[1]["S"][2];
+				for (const auto& transformElement : shapeValue["transforms"]) {
+					// Check for and process scaling "S"
+					if (transformElement.contains("S") && transformElement["S"].is_array()) {
+						auto S = transformElement["S"];
+						shape.transforms.scale.x = S[0].get<float>();
+						shape.transforms.scale.y = S[1].get<float>();
+						shape.transforms.scale.z = S[2].get<float>();
+					}
 
-				//Write rotations
-				if (transforms[0].find("Ry") != transforms[0].end()) {
-					shape.transforms.rotation.y = transforms[0]["Ry"];
-				}
-				if (transforms[0].find("Rx") != transforms[0].end()) {
-					shape.transforms.rotation.x = transforms[0]["Rx"];
-				}
-				if (transforms[0].find("Rz") != transforms[0].end()) {
-					shape.transforms.rotation.z = transforms[0]["Rz"];
-				}
+					// Check for and process translation "T"
+					if (transformElement.contains("T") && transformElement["T"].is_array()) {
+						auto T = transformElement["T"];
+						shape.transforms.translation.x = T[0].get<float>();
+						shape.transforms.translation.y = T[1].get<float>();
+						shape.transforms.translation.z = T[2].get<float>();
+					}
 
-				shape.transforms.translation.x = transforms[2]["T"][0];
-				shape.transforms.translation.y = transforms[2]["T"][1];
-				shape.transforms.translation.z = transforms[2]["T"][2];
+					// Handle rotation "Rx", "Ry", "Rz"
+					if (transformElement.contains("Rx")) {
+						shape.transforms.rotation.x = transformElement["Rx"].get<float>();
+					}
+					if (transformElement.contains("Ry")) {
+						shape.transforms.rotation.y = transformElement["Ry"].get<float>();
+					}
+					if (transformElement.contains("Rz")) {
+						shape.transforms.rotation.z = transformElement["Rz"].get<float>();
+					}
+				}
 
 				mScene->shapes.push_back(shape);
 				//Auto load into mesh map
@@ -818,7 +919,7 @@ int Raytracer::Render(const std::string outputName) {
 		for (int x = 0; x < mDisplay->xRes; x++) {
 			Ray ray;
 			GenerateRay(x, y, ray);
-			mDisplay->frameBuffer[y * mDisplay->xRes + x] = Raycast(ray, 9999999);
+			mDisplay->frameBuffer[y * mDisplay->xRes + x] = Raycast(ray);
 			std::cout << "\rRendered: " << progress << "/" << total << "     ";
 			std::cout.flush();
 			progress++;

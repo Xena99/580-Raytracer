@@ -248,6 +248,15 @@ Raytracer::Vector3 Raytracer::InterpolateVector3(const Vector3 vectors[], float 
 /// <param name="hitInfo"></param>
 /// <returns></returns>
 bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, RaycastHitInfo& hitInfo, const Matrix& modelMatrix) {
+	// Compute the inverse of the model matrix for transforming the ray
+	Matrix inverseModelMatrix;
+	Matrix::Inverse(modelMatrix, inverseModelMatrix);
+
+	// Transform the ray into the object's local space
+	Vector3 localRayOrigin = inverseModelMatrix.TransformPoint(ray.origin);
+	Vector3 localRayDirection = inverseModelMatrix.TransformDirection(ray.direction);  // Use TransformDirection
+	localRayDirection.normalize();
+
 	//Image a plane where the triangle lies on, the ray will intersect with the plane if the plane is in front of the ray
 	//Once intersection happens with the plane, we can then figure out if the intersection point is inside the triangle
 	//Even if a plane is in front of the ray, the ray will miss it if it's parallel to the ray
@@ -258,7 +267,7 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 	Vector3 planeNormal = Vector3::cross(_edge1, _edge2);
 	planeNormal.normalize();
 
-	float planeNormalDotRayDir = Vector3::dot(planeNormal, ray.direction);
+	float planeNormalDotRayDir = Vector3::dot(planeNormal, localRayDirection);
 
 	//Dot product of two vectors is 0 means they are perpendicular to each other, 0, and 1 are pointing along same dir or opposite
 	//Perpendicular with the normal means no intersection and you have to go along the normal to point to the plane
@@ -268,31 +277,30 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 
 	//Ax + By + Cz + D = 0 for plane, where A B C is the normal to plane N = (A, B, C), x y z is any point on the plane
 	//We can use any vertex x y z to substitute 
-	float D = -(planeNormal.x * triangle.v0.vertexPos.x + planeNormal.y * triangle.v0.vertexPos.y + planeNormal.z * triangle.v0.vertexPos.z);
+	float D = -Vector3::dot(planeNormal, triangle.v0.vertexPos);
 
 	//Since P is a point on the plane, we can substitute it into Ax + By + Cz + D = 0, and we already know D from above
 	//We can calculate t, which is the distance from ray origin to intersection point
-	float t = -(Vector3::dot(planeNormal, ray.origin) + D) / Vector3::dot(planeNormal, ray.direction);
-
+	float t = -(Vector3::dot(planeNormal, localRayOrigin) + D) / planeNormalDotRayDir;
 	if (t < 0) {
-		//The plane is behind the ray, thus no intersection
-		return false;
+		return false;  // Intersection is behind the ray
 	}
+
 	//P = RayOrigin + t * RayDirection -> point on plane
-	Vector3 pointOnPlane = ray.origin + (ray.direction * t);
+	Vector3 localPointOnPlane = localRayOrigin + localRayDirection * t;
 
 	float totalArea = CalcTriangleAreaSigned(triangle.v0.vertexPos, triangle.v1.vertexPos, triangle.v2.vertexPos, planeNormal);
 
 	// Calculate the areas for the barycentric coordinates
-	float alpha = CalcTriangleAreaSigned(pointOnPlane, triangle.v1.vertexPos, triangle.v2.vertexPos, planeNormal) / totalArea;
-	float beta = CalcTriangleAreaSigned(triangle.v0.vertexPos, pointOnPlane, triangle.v2.vertexPos, planeNormal) / totalArea;
-	float gamma = CalcTriangleAreaSigned(triangle.v0.vertexPos, triangle.v1.vertexPos, pointOnPlane, planeNormal) / totalArea;
+	float alpha = CalcTriangleAreaSigned(localPointOnPlane, triangle.v1.vertexPos, triangle.v2.vertexPos, planeNormal) / totalArea;
+	float beta = CalcTriangleAreaSigned(triangle.v0.vertexPos, localPointOnPlane, triangle.v2.vertexPos, planeNormal) / totalArea;
+	float gamma = CalcTriangleAreaSigned(triangle.v0.vertexPos, triangle.v1.vertexPos, localPointOnPlane, planeNormal) / totalArea;
 
 	if (alpha <= EPSILON || beta <= EPSILON || gamma <= EPSILON) return false;
 
 	//Write info only when pt is inside
 	//Transform hit point to world space
-	hitInfo.hitPoint = modelMatrix.TransformPoint(pointOnPlane);
+	hitInfo.hitPoint = modelMatrix.TransformPoint(localPointOnPlane);
 
 	//Normal needs to use inverse transpose of the model matrix
 	Matrix inverseTransposeModel;
@@ -500,8 +508,8 @@ int Raytracer::LoadMesh(const std::string meshName, const int shapeId) {
 	file >> jsonData;
 
 	Mesh* mesh = new Mesh();
+	std::string shapeType = jsonData["data"][0]["type"];
 	for (const auto& item : jsonData["data"]) {
-		std::string shapeType = item["type"];
 		if (shapeType == "polygon") {
 			mesh->type = Mesh::RT_POLYGON;
 			Triangle triangle;
@@ -831,7 +839,7 @@ int main() {
 
 	//Do ray tracing
 	Raytracer rt(250, 250);
-	rt.LoadSceneJSON("simpleSphereScene.json");
+	rt.LoadSceneJSON("scene.json");
 	rt.Render("output.ppm");
 	auto stopTime = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);

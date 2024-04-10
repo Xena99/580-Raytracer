@@ -2,9 +2,9 @@
   "scene": {
     "shapes": [
       {
-        "id": "triangle",
+        "id": "sphere1",
         "notes": "",
-        "geometry": "1triangle",
+        "geometry": "1sphere",
         "material": {
           "Cs": [
             1,

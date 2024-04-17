@@ -162,44 +162,85 @@ void Raytracer::ComputeFresnel(float indexOfRefraction, const Vector3& normal, c
 
 //indexMedium1 is the medium before the refractive material. This is typically air with its indexM1=1
 //indexMedium2 is the medium the ray enters that refracts the ray. (indexM2)
+//Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector3& N, const float& indexM2) {
+
+	//Vector3 referenceN = N;
+	//float NdotI = N.dot(I);
+	//float indexM1 = 1; //hard coding using air as default
+	//float indexM2ref = indexM2;
+	//if (NdotI < 0) {
+	//	NdotI = -NdotI;
+	//}
+	//else {
+	//	referenceN = -N;
+	//	//have to swap index of refractions
+	//	std::swap(indexM1, indexM2ref);
+	//}
+
+	//float refractRay = indexM1 / indexM2ref;
+
+	////clamp NdotI between -1 and 1
+	//if (NdotI > 1) {
+	//	NdotI = 1;
+	//}
+	//else if (NdotI < -1) {
+	//	NdotI = -1;
+	//}
+
+	//float angle = 1 - refractRay * refractRay * (1 - NdotI * NdotI);
+
+	//if (angle < EPSILON) {
+	//	// Total internal reflection
+	//	Vector3 reflectionDir = Vector3::reflect(I, N);
+	//	reflectionDir.normalize();
+	//	return reflectionDir;
+	//}
+	//else {
+	//	Vector3 reflectionDir = (I * refractRay + referenceN * (refractRay * NdotI - sqrtf(angle)));
+	//	reflectionDir.normalize();
+	//	return reflectionDir;
+	//}
+//}
+
+//indexMedium1 is the medium before the refractive material. This is typically air with its indexM1=1
+//indexMedium2 is the medium the ray enters that refracts the ray. (indexM2)
 Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector3& N, const float& indexM2) {
-	Vector3 referenceN = N;
-	float NdotI = N.dot(I);
-	float indexM1 = 1; //hard coding using air as default
-	float indexM2ref = indexM2;
-	if (NdotI < 0) {
-		NdotI = -NdotI;
+	float cosi = I.dot(N);
+
+	if (cosi < -1) {
+		cosi = -1;
+	}
+	else if (cosi > 1) {
+		cosi = 1;
+	}
+
+	float indexM1Ref = 1; //hard coding using air as default
+	float indexM2Ref = indexM2;
+
+	Vector3 n = N;
+
+	if (cosi < 0) {
+		cosi = -1 * cosi;
 	}
 	else {
-		referenceN = -N;
-		//have to swap index of refractions
-		std::swap(indexM1, indexM2ref);
+		float temp = indexM1Ref;
+		indexM1Ref = indexM2Ref;
+		indexM2Ref = temp;
+		n = -N;
 	}
 
-	float refractRay = indexM1 / indexM2ref;
+	float eta = indexM1Ref / indexM2Ref;
 
-	//clamp NdotI between -1 and 1
-	if (NdotI > 1) {
-		NdotI = 1;
-	}
-	else if (NdotI < -1) {
-		NdotI = -1;
-	}
+	float k = 1 - eta * eta * (1 - cosi * cosi);
 
-	float angle = 1 - refractRay * refractRay * (1 - NdotI * NdotI);
-
-	if (angle < EPSILON) {
-		// Total internal reflection
-		Vector3 reflectionDir = Vector3::reflect(I, N);
-		reflectionDir.normalize();
-		return reflectionDir;
+	if (k < 0) {
+		return 0;
 	}
 	else {
-		Vector3 reflectionDir = (I * refractRay + referenceN * (refractRay * NdotI - sqrtf(angle)));
-		reflectionDir.normalize();
-		return reflectionDir;
+		return I * eta  + n*(eta * cosi - sqrtf(k));
 	}
 }
+
 //color1 is the original surface color, color2 is the color returned by the reflected ray, 
 // and weight is the material's reflection coefficient (Ks). 
 Raytracer::Pixel Raytracer::MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight) {

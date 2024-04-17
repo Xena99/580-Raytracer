@@ -20,6 +20,7 @@
       },
       {
         "id": "sphere1",
+        "notes": "This is the red one in the middle (in line with 2 other ones.)",
         "geometry": "1sphere",
         "material": {
           "Cs": [ 1, 0, 0 ],
@@ -37,6 +38,7 @@
       },
       {
         "id": "sphere2",
+        "notes": "This is the green one in the middle (in line with 2 other ones.)",
         "geometry": "1sphere",
         "material": {
           "Cs": [ 0, 1, 0 ],
@@ -48,11 +50,12 @@
         },
         "transforms": [
           { "S": [ 1, 1, 1 ] },
-          { "T": [ 0, 0, 0 ] }
+          { "T": [ 2, 0, 0 ] }
         ]
       },
       {
         "id": "sphere3",
+        "notes": "This is the blue one in the middle (in line with 2 other ones.)",
         "geometry": "1sphere",
         "material": {
           "Cs": [ 0, 0, 1 ],
@@ -64,11 +67,12 @@
         },
         "transforms": [
           { "S": [ 1, 1, 1 ] },
-          { "T": [ -3, 0, 0 ] }
+          { "T": [ -1, 0, 0 ] }
         ]
       },
       {
         "id": "sphereback",
+        "notes": "This is the blue one in the front.",
         "geometry": "1sphere",
         "material": {
           "Cs": [ 0, 0, 1 ],
@@ -85,9 +89,10 @@
       },
       {
         "id": "sphereback2",
+        "notes": "This is the clear/glass one.",
         "geometry": "1sphere",
         "material": {
-          "Cs": [ 0, 1, 0 ],
+          "Cs": [ 1, 1, 1 ],
           "Ka": 0.5,
           "Kd": 0.75,
           "Ks": 0.7,

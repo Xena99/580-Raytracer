@@ -234,7 +234,7 @@ Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector
 	float k = 1 - eta * eta * (1 - cosi * cosi);
 
 	if (k < 0) {
-		return 0;
+		return Vector3(0, 0, 0);
 	}
 	else {
 		return I * eta  + n*(eta * cosi - sqrtf(k));

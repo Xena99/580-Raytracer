@@ -1,4 +1,4 @@
-#include "Raytracer.h"
+ï»¿#include "Raytracer.h"
 #include <iostream>
 #include "ExternalPlugins/json.hpp"
 #include "ExternalPlugins/CImg/CImg.h"
@@ -113,11 +113,11 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 
 		// Combine local color, reflection, and refraction
 		float albedoColorFactor = 1 - material.Ks - material.Kt;
-		if (albedoColorFactor < 0) {
-			albedoColorFactor = 0;
-		}
-		//localColor = localColor * albedoColorFactor + finalReflectionColor + finalRefractionColor;
-		localColor = (localColor * material.Kd) + finalReflectionColor + finalRefractionColor;
+		albedoColorFactor = std::max(albedoColorFactor, 0.0f); // Ensures the factor is not negative.
+
+		// Combine the colors with their respective factors.
+		localColor = (localColor * albedoColorFactor) + (finalReflectionColor * material.Ks) + (finalRefractionColor * material.Kt);
+
 	}
 
 	return localColor.clamp();
@@ -160,50 +160,6 @@ void Raytracer::ComputeFresnel(float indexOfRefraction, const Vector3& normal, c
 	}
 }
 
-//indexMedium1 is the medium before the refractive material. This is typically air with its indexM1=1
-//indexMedium2 is the medium the ray enters that refracts the ray. (indexM2)
-//Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector3& N, const float& indexM2) {
-
-	//Vector3 referenceN = N;
-	//float NdotI = N.dot(I);
-	//float indexM1 = 1; //hard coding using air as default
-	//float indexM2ref = indexM2;
-	//if (NdotI < 0) {
-	//	NdotI = -NdotI;
-	//}
-	//else {
-	//	referenceN = -N;
-	//	//have to swap index of refractions
-	//	std::swap(indexM1, indexM2ref);
-	//}
-
-	//float refractRay = indexM1 / indexM2ref;
-
-	////clamp NdotI between -1 and 1
-	//if (NdotI > 1) {
-	//	NdotI = 1;
-	//}
-	//else if (NdotI < -1) {
-	//	NdotI = -1;
-	//}
-
-	//float angle = 1 - refractRay * refractRay * (1 - NdotI * NdotI);
-
-	//if (angle < EPSILON) {
-	//	// Total internal reflection
-	//	Vector3 reflectionDir = Vector3::reflect(I, N);
-	//	reflectionDir.normalize();
-	//	return reflectionDir;
-	//}
-	//else {
-	//	Vector3 reflectionDir = (I * refractRay + referenceN * (refractRay * NdotI - sqrtf(angle)));
-	//	reflectionDir.normalize();
-	//	return reflectionDir;
-	//}
-//}
-
-//indexMedium1 is the medium before the refractive material. This is typically air with its indexM1=1
-//indexMedium2 is the medium the ray enters that refracts the ray. (indexM2)
 Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector3& N, const float& indexM2) {
 	float cosi = I.dot(N);
 
@@ -241,15 +197,6 @@ Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector
 	}
 }
 
-//color1 is the original surface color, color2 is the color returned by the reflected ray, 
-// and weight is the material's reflection coefficient (Ks). 
-Raytracer::Pixel Raytracer::MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight) {
-	Raytracer::Pixel result;
-	result.r = static_cast<short>(std::min(255.0f, color1.r * (1 - weight) + color2.r * weight));
-	result.g = static_cast<short>(std::min(255.0f, color1.g * (1 - weight) + color2.g * weight));
-	result.b = static_cast<short>(std::min(255.0f, color1.b * (1 - weight) + color2.b * weight));
-	return result;
-}
 
 float Raytracer::Clipf(float input, int min, int max) {
 	if (input < min) return min;
@@ -258,13 +205,6 @@ float Raytracer::Clipf(float input, int min, int max) {
 }
 
 
-/// <summary>
-/// Computes Phong Lighting for pixel coloring
-/// </summary>
-/// <param name="hitInfo"></param>
-/// <param name="light"></param>
-/// <param name="material"></param>
-/// <returns></returns>
 Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light, const Material& material) {
 	Vector3 lightVector;
 	if (light.lightType == Light::Point) {
@@ -278,16 +218,22 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	//Assign normal to use for lighting based on mesh type
 	Vector3 _normal;
 	switch (hitInfo.type) {
-	case Mesh::RT_POLYGON: {
-		Vector3 triVertNormals[3] = { hitInfo.triangle->v0.vertexNormal, hitInfo.triangle->v1.vertexNormal , hitInfo.triangle->v2.vertexNormal };
-		//Interpolated normal
-		_normal = InterpolateVector3(triVertNormals, hitInfo.alpha, hitInfo.beta, hitInfo.gamma, true);
-		break;
-	}
-	case Mesh::RT_SPHERE: {
-		_normal = hitInfo.normal;
-		break;
-	}
+		case Mesh::RT_POLYGON: {
+			Vector3 triVertNormals[3] = { hitInfo.triangle->v0.vertexNormal, hitInfo.triangle->v1.vertexNormal , hitInfo.triangle->v2.vertexNormal };
+			//Interpolated normal
+			_normal = InterpolateVector3(triVertNormals, hitInfo.alpha, hitInfo.beta, hitInfo.gamma, true);
+			break;
+		}
+		case Mesh::RT_SPHERE: {
+			_normal = hitInfo.normal;
+			break;
+		}
+		case Mesh::RT_PLANE: {
+			//Interpolate hitNormal
+			_normal = InterpolateNormalForPlane(*hitInfo.plane, hitInfo.hitPoint);
+			break;
+		}
+
 	}
 
 	//Lighting = diffuse + specular
@@ -306,8 +252,9 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	float specularStrength = fmax(Vector3::dot(viewVector, reflection), 0);
 	specularStrength = std::powf(specularStrength, material.specularExponet);
 	Vector3 _specular = light.color * specularStrength * light.intensity;
+	Vector3 ambient = material.surfaceColor * light.color * material.Ka * light.intensity;
 
-	lighting = _diffuse * material.Kd + _specular * material.Ks;
+	lighting = ambient + _diffuse * material.Kd + _specular * material.Ks;
 
 	Vector3 color = material.surfaceColor * lighting;
 
@@ -323,6 +270,25 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 
 	return finalColor;
 }
+
+Raytracer::Vector3 Raytracer::InterpolateNormalForPlane(const Plane& plane, const Vector3& hitPoint) {
+	// Calculate the plane's basis vectors
+	Vector3 planeU, planeV;
+	Vector3::getOrthogonalVectors(plane.normal, planeU, planeV);
+
+	// Project the hit point onto the plane's basis vectors
+	float u = Vector3::dot(hitPoint - plane.position, planeU);
+	float v = Vector3::dot(hitPoint - plane.position, planeV);
+
+	// Interpolate the normal based on the hit point's position on the plane
+	Vector3 interpolatedNormal = plane.normal;
+
+	// Optionally, you can add additional logic here to modify the interpolatedNormal
+	// based on the hit point's position on the plane (u, v) if needed.
+
+	return interpolatedNormal;
+}
+
 
 Raytracer::Vector3 Raytracer::RandomUnitVector() {
 	std::uniform_real_distribution<float> distribution(0.0, 1.0);
@@ -373,8 +339,49 @@ Raytracer::Vector3 Raytracer::InterpolateVector3(const Vector3 vectors[], float 
 	return result;
 }
 
+bool Raytracer::IntersectPlane(const Ray& ray, const Plane& plane, const Material& material, RaycastHitInfo& hitInfo, const Matrix& modelMatrix) {
+	// Compute the inverse of the model matrix to transform the ray to the plane's local space
+	Matrix inverseModelMatrix;
+	if (Matrix::Inverse(modelMatrix, inverseModelMatrix) == RT_FAILURE) {
+		return false;  // Early exit if the inverse matrix calculation fails
+	}
+
+	// Transform the ray into the local space of the object
+	Vector3 localRayOrigin = inverseModelMatrix.TransformPoint(ray.origin);
+	Vector3 localRayDirection = inverseModelMatrix.TransformDirection(ray.direction);
+	localRayDirection.normalize();
+
+	// Calculate the intersection with the plane in local space
+	float denom = Vector3::dot(plane.normal, localRayDirection);
+	if (std::abs(denom) > EPSILON) {  // Ensure the ray is not parallel to the plane
+		// Calculate t, the distance along the ray to the intersection point
+		float t = -(Vector3::dot(plane.normal, localRayOrigin) + plane.distance) / denom;
+		if (t >= 0) {  // Intersection must be along the positive direction of the ray
+			hitInfo.hitPoint = localRayOrigin + localRayDirection * t;  // Calculate local space intersection point
+			hitInfo.distance = t;
+			hitInfo.material = &material;
+
+			// Compute the normal direction in world space
+			// Using inverse transpose to ensure non-uniform scaling is accounted for
+			Matrix inverseTransposeModel;
+			if (Matrix::InverseTransposeForNormals(modelMatrix, inverseTransposeModel) == RT_FAILURE) {
+				return false;
+			}
+			Vector3 transformedNormal = inverseTransposeModel.TransformDirection(plane.normal);
+			if (Vector3::dot(transformedNormal, ray.direction) > 0) {
+				transformedNormal = -transformedNormal;  // Invert normal if it points towards the ray
+			}
+			hitInfo.normal = transformedNormal;
+			hitInfo.normal.normalize();
+			return true;  // Intersection found
+		}
+	}
+	return false;  // No intersection
+}
+
+
 /// <summary>
-/// Möller–Trumbore intersection algorithm, given a ray and triangle, test intersection
+/// MÃ¶llerâ€“Trumbore intersection algorithm, given a ray and triangle, test intersection
 /// If successful intersection, outputs world space hit point and hit normal
 /// </summary>
 /// <param name="ray"></param>
@@ -438,13 +445,13 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 
 	//Normal needs to use inverse transpose of the model matrix
 	Matrix inverseTransposeModel;
-	if (RT_FAILURE == Matrix::InverseAndTranspose(modelMatrix, inverseTransposeModel)) {
-		std::cerr << "Failure during matrix inverse transpose calculation of model matrix";
+	if (RT_FAILURE == Matrix::InverseTransposeForNormals(modelMatrix, inverseTransposeModel)) {
+		std::cerr << "Failure during matrix inverse transpose calculation for normals.";
 		return false;
 	}
 
 	hitInfo.type = Mesh::RT_POLYGON;
-	hitInfo.normal = inverseTransposeModel.TransformPoint(planeNormal);
+	hitInfo.normal = inverseTransposeModel.TransformDirection(planeNormal);
 	hitInfo.normal.normalize();
 	hitInfo.distance = t;
 	hitInfo.alpha = alpha;
@@ -502,8 +509,12 @@ bool Raytracer::IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHit
 
 	// Use the InverseTranspose() function for normal transformation to handle non-uniform scaling
 	Matrix inverseTransposeMatrix;
-	Matrix::InverseAndTranspose(modelMatrix, inverseTransposeMatrix);
-	hitInfo.normal = inverseTransposeMatrix.TransformDirection(localNormal);  // Should be TransformDirection for normals
+	if (RT_FAILURE == Matrix::InverseTransposeForNormals(modelMatrix, inverseTransposeMatrix)) {
+		std::cerr << "Failure during matrix inverse transpose calculation for normals.";
+		return false;
+	}
+
+	hitInfo.normal = inverseTransposeMatrix.TransformDirection(localNormal);
 	hitInfo.normal.normalize();
 
 	hitInfo.type = Mesh::RT_SPHERE;
@@ -560,6 +571,24 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 					if (tempInfo.distance < closestHit.distance) {
 						closestHit = tempInfo;
 						closestHit.sphere = &mesh->sphere;
+						closestHit.material = &m.material;
+					}
+				}
+			}
+		}
+		else if (mesh->type == Mesh::RT_PLANE) {
+			RaycastHitInfo tempInfo;
+			if (IntersectPlane(ray, mesh->plane, m.material, tempInfo, modelMatrix)) {
+				if (!hasFoundHit) {
+					hasFoundHit = true;
+					closestHit = tempInfo;
+					closestHit.plane = &mesh->plane;
+					closestHit.material = &m.material;
+				}
+				else {
+					if (tempInfo.distance < closestHit.distance) {
+						closestHit = tempInfo;
+						closestHit.plane = &mesh->plane;
 						closestHit.material = &m.material;
 					}
 				}
@@ -628,12 +657,12 @@ Raytracer::Matrix Raytracer::ComputeModelMatrix(const Raytracer::Transformation&
 	translationMatrix[2][2] = 1.0f;
 	translationMatrix[3][3] = 1.0f;
 
-	// Combine all transformations
-	Raytracer::Matrix modelMatrix = translationMatrix * rotationMatrix * scaleMatrix;
+	// Combine all transformations: Translation * Rotation * Scale
+	Raytracer::Matrix modelMatrix = scaleMatrix * rotationMatrix * translationMatrix;
 	return modelMatrix;
 }
 
-//////Helper Functions//////
+
 int Raytracer::LoadMesh(const std::string meshName) {
 	auto it = mScene->meshMap.find(meshName);
 	if (it != mScene->meshMap.end()) {
@@ -686,6 +715,16 @@ int Raytracer::LoadMesh(const std::string meshName) {
 			sphere.radius = radius;
 			mesh->sphere = sphere;
 		}
+		else if (shapeType == "plane") {
+			mesh->type = Mesh::RT_PLANE;
+			Plane plane;
+
+			plane.normal.x = item["normal"][0];
+			plane.normal.y = item["normal"][1];
+			plane.normal.z = item["normal"][2];
+			plane.distance = item["distance"];
+			mesh->plane = plane;
+		}
 	}
 
 	mScene->meshMap[meshName] = mesh;
@@ -736,6 +775,18 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 
 				//Write transformations
 				for (const auto& transformElement : shapeValue["transforms"]) {
+
+					// Handle rotation "Rx", "Ry", "Rz"
+					if (transformElement.contains("Rx")) {
+						shape.transforms.rotation.x = transformElement["Rx"].get<float>();
+					}
+					if (transformElement.contains("Ry")) {
+						shape.transforms.rotation.y = transformElement["Ry"].get<float>();
+					}
+					if (transformElement.contains("Rz")) {
+						shape.transforms.rotation.z = transformElement["Rz"].get<float>();
+					}
+
 					// Check for and process scaling "S"
 					if (transformElement.contains("S") && transformElement["S"].is_array()) {
 						auto S = transformElement["S"];
@@ -751,22 +802,22 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 						shape.transforms.translation.y = T[1].get<float>();
 						shape.transforms.translation.z = T[2].get<float>();
 					}
-
-					// Handle rotation "Rx", "Ry", "Rz"
-					if (transformElement.contains("Rx")) {
-						shape.transforms.rotation.x = transformElement["Rx"].get<float>();
-					}
-					if (transformElement.contains("Ry")) {
-						shape.transforms.rotation.y = transformElement["Ry"].get<float>();
-					}
-					if (transformElement.contains("Rz")) {
-						shape.transforms.rotation.z = transformElement["Rz"].get<float>();
-					}
 				}
-
-				mScene->shapes.push_back(shape);
-				//Auto load into mesh map
-				status |= LoadMesh(shape.geometryId);
+				if (shape.geometryId == "plane") {
+					// Load plane mesh
+					Plane plane;
+					const auto& planeData = shapeValue["geometry"];
+					plane.normal.x = planeData["normal"][0];
+					plane.normal.y = planeData["normal"][1];
+					plane.normal.z = planeData["normal"][2];
+					plane.distance = planeData["distance"];
+					mScene->planes.push_back(plane);
+				}
+				else {
+					mScene->shapes.push_back(shape);
+					//Auto load into mesh map
+					status |= LoadMesh(shape.geometryId);
+				}
 			}
 		}
 
@@ -856,16 +907,20 @@ int Raytracer::FlushFrameBufferToPPM(std::string outputName) {
 
 	// Write the PPM header
 	outfile << "P6\n" << mDisplay->xRes << " " << mDisplay->yRes << "\n255\n";
-
 	// Write the pixel data
 	for (int y = 0; y < mDisplay->yRes; y++) {
 		for (int x = 0; x < mDisplay->xRes; x++) {
-			// Access the pixel at (x, y)
 			const Pixel& pixel = mDisplay->frameBuffer[y * mDisplay->xRes + x];
-			// Write the RGB values to the file
-			outfile.put(pixel.r);
-			outfile.put(pixel.g);
-			outfile.put(pixel.b);
+
+			// Apply gamma correction (assuming sRGB color space with gamma 2.2)
+			unsigned char gammaCorrectR = static_cast<unsigned char>(std::pow(pixel.r / 255.0f, 1.0f / 2.2f) * 255.0f);
+			unsigned char gammaCorrectG = static_cast<unsigned char>(std::pow(pixel.g / 255.0f, 1.0f / 2.2f) * 255.0f);
+			unsigned char gammaCorrectB = static_cast<unsigned char>(std::pow(pixel.b / 255.0f, 1.0f / 2.2f) * 255.0f);
+
+			// Write the gamma-corrected RGB values to the file
+			outfile.put(gammaCorrectR);
+			outfile.put(gammaCorrectG);
+			outfile.put(gammaCorrectB);
 		}
 	}
 
@@ -874,34 +929,34 @@ int Raytracer::FlushFrameBufferToPPM(std::string outputName) {
 
 }
 
-/// <summary>
-/// Generates the ray based on x, y pixel locations
-/// </summary>
-/// <param name="x"></param>
-/// <param name="y"></param>
-/// <param name="ray"></param>
 void Raytracer::GenerateRay(int x, int y, Ray& ray) {
-	//Find viewport position
-	//X, Y to NDC which is [-1, 1]
+	// Convert pixel coordinates to NDC
 	double NDCX = (2.0 * x) / mDisplay->xRes - 1;
 	double NDCY = 1 - (2.0 * y) / mDisplay->yRes;
 	float aspectRatio = (float)mDisplay->xRes / (float)mDisplay->yRes;
+
+	// Adjust for aspect ratio and field of view
 	NDCX *= aspectRatio * tan(ToRadian(mDisplay->fov / 2));
 	NDCY *= tan(ToRadian(mDisplay->fov / 2));
 
-	//Ray.origin is camera position, the from vector
+	// Set the ray origin to the camera's position
 	ray.origin = mScene->camera.from;
 
-	ray.direction.x = NDCX;
-	ray.direction.y = NDCY;
-	ray.direction.z = -1.0f;
+	// Set initial ray direction based on NDC coordinates
+	Vector3 direction(NDCX, NDCY, -1.0);  // Assume the camera looks towards -z in camera space
 
-	//Kevin: For some reason this won't work
-	//Matrix inverseViewMatrix;
-	//Matrix::InverseAndTranspose(mScene->camera.viewMatrix, inverseViewMatrix);
-	//ray.direction = inverseViewMatrix.TransformPoint(ray.direction);
-	ray.direction.normalize();
+	// Apply the inverse of the camera's view matrix to transform the direction to world space
+	Matrix inverseViewMatrix;
+	if (Matrix::Inverse(mScene->camera.viewMatrix, inverseViewMatrix) == RT_SUCCESS) {
+		ray.direction = inverseViewMatrix.TransformDirection(direction);
+		ray.direction.normalize();  // Normalize the direction to ensure it's a unit vector
+	}
+	else {
+		// Handle the error case where the inverse could not be computed
+		std::cerr << "Failed to compute the inverse of the view matrix.\n";
+	}
 }
+
 
 int Raytracer::CalculateViewMatrix(Camera& camera, Vector3 u, Vector3 v, Vector3 n, Vector3 r) {
 	Matrix view;
@@ -987,15 +1042,11 @@ float Raytracer::CalcTriangleAreaSigned(const Vector3& A, const Vector3& B, cons
 
 int main() {
 	//For recording duration stats
-	auto startTime = std::chrono::high_resolution_clock::now();
 
 	//Do ray tracing
-	Raytracer rt(250, 250);
+	Raytracer rt(500,500);
 	rt.LoadSceneJSON("simpleSphereScene.json");
 	rt.Render("output.ppm");
-	auto stopTime = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);
-	std::cout << "\Raytracer completed in " << duration.count() << " milliseconds.\n";
 
 	return 0;
 }
@@ -1003,7 +1054,7 @@ int main() {
 void Raytracer::PrintProgress(int current, int total) {
 	int progress = current * 100 / total;
 	std::cout << "\r["; // Carriage return to overwrite the line
-	int barWidth = 50; // Width of the progress bar in characters
+	int barWidth = 20; // Width of the progress bar in characters
 	int pos = barWidth * progress / 100;
 	for (int i = 0; i < barWidth; ++i) {
 		if (i < pos) std::cout << "=";

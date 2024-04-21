@@ -3,136 +3,58 @@
     "shapes": [
       {
         "id": "floor",
-        "geometry": "floor",
+        "geometry": "1plane",
         "material": {
-          "Cs": [ 1, 1, 1 ],
-          "Ka": 0,
-          "Kd": 0,
-          "Ks": 0,
-          "Kt": 0,
-          "n": 2.0
+          "Cs": [0.5, 0.5, 0.5],
+          "Ka": 0.2,
+          "Kd": 0.7,
+          "Ks": 0.9,
+          "Kt": 0.0,
+          "n": 700
         },
         "transforms": [
-          { "Ry": 0 },
-          { "S": [ 1, 1, 1 ] },
-          { "T": [ 3, 1, 0 ] }
+          { "S": [5, 5, 5] },
+          { "T": [0, -1, 0] }
         ]
       },
-      {
-        "id": "sphere1",
-        "notes": "This is the red one in the middle (in line with 2 other ones.)",
-        "geometry": "1sphere",
-        "material": {
-          "Cs": [ 1, 0, 0 ],
-          "Ka": 0.5,
-          "Kd": 0.75,
-          "Ks": 0.95,
-          "Kt": 0.2,
-          "n": 2.0
+	  {
+		  "id": "bsphere",
+		  "geometry": "1sphere",
+		  "material": {
+          "Cs": [0.8, 0.8,0.8],
+          "Ka": 0.3,
+          "Kd": 0.8,
+          "Ks": 0.9,
+          "Kt": 0.8,
+          "n": 900
         },
         "transforms": [
-          { "Ry": 0 },
-          { "S": [ 1, 1, 1 ] },
-          { "T": [ 5, 0, 0 ] }
+          { "S": [1.5, 1,5, 1,5] },
+          { "T": [0, 2, 0] }
         ]
-      },
-      {
-        "id": "sphere2",
-        "notes": "This is the green one in the middle (in line with 2 other ones.)",
-        "geometry": "1sphere",
-        "material": {
-          "Cs": [ 0, 1, 0 ],
-          "Ka": 0.5,
-          "Kd": 0.75,
-          "Ks": 0.2,
-          "Kt": 0.1,
-          "n": 2.0
-        },
-        "transforms": [
-          { "S": [ 1, 1, 1 ] },
-          { "T": [ 2, 0, 0 ] }
-        ]
-      },
-      {
-        "id": "sphere3",
-        "notes": "This is the blue one in the middle (in line with 2 other ones.)",
-        "geometry": "1sphere",
-        "material": {
-          "Cs": [ 0, 0, 1 ],
-          "Ka": 0.5,
-          "Kd": 0.75,
-          "Ks": 0,
-          "Kt": 0,
-          "n": 2.0
-        },
-        "transforms": [
-          { "S": [ 1, 1, 1 ] },
-          { "T": [ -1, 0, 0 ] }
-        ]
-      },
-      {
-        "id": "sphereback",
-        "notes": "This is the blue one in the front.",
-        "geometry": "1sphere",
-        "material": {
-          "Cs": [ 0, 0, 1 ],
-          "Ka": 0.5,
-          "Kd": 0.75,
-          "Ks": 0.3,
-          "Kt": 0.5,
-          "n": 2.0
-        },
-        "transforms": [
-          { "S": [ 1, 1, 1 ] },
-          { "T": [ 3, 0, 3 ] }
-        ]
-      },
-      {
-        "id": "sphereback2",
-        "notes": "This is the clear/glass one.",
-        "geometry": "1sphere",
-        "material": {
-          "Cs": [ 1, 1, 1 ],
-          "Ka": 0.5,
-          "Kd": 0.75,
-          "Ks": 0.7,
-          "Kt": 0.98,
-          "n": 2.0
-        },
-        "transforms": [
-          { "S": [ 1, 1, 1 ] },
-          { "T": [ 0, 3, 3 ] }
-        ]
-      }
+	  }
     ],
     "lights": [
-      {
-        "id": "L1",
+        {
+        "id": "ambientLight",
         "type": "ambient",
-        "color": [ 1, 1, 1 ],
+        "color": [1, 1, 1],
         "intensity": 0.2
       },
       {
-        "id": "L2",
+        "id": "directionalLight",
         "type": "directional",
-        "color": [ 1, 0.5, 1 ],
-        "intensity": 0.6,
-        "from": [ 3, 4, 0 ],
-        "to": [ 0, 0, 0 ]
-      },
-      {
-        "id": "L3",
-        "type": "point",
-        "color": [ 1.0, 0.647, 0.0 ],
-        "intensity": 0.8,
-        "position": [ 0, 5, 0 ]
+        "color": [1, 1, 1],
+        "intensity": 1.0,
+        "from": [0, 10, 0],
+        "to": [0, 0, 0]
       }
     ],
     "camera": {
-      "from": [ 3, 4, 10 ],
-      "to": [ 0, 0, 0 ],
-      "bounds": [ 3, 10, 1, -1, 1, -1 ],
-      "resolution": [ 500, 500 ]
+      "from": [0, 2.5, 10],
+      "to": [0, 0, 0],
+      "bounds": [0.1, 100, 0, 5, 5, 0],
+      "resolution": [500, 500]
     }
   }
 }

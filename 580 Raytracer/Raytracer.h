@@ -30,6 +30,7 @@ class Raytracer {
 	struct Transformation;
 	struct Material;
 	struct Scene;
+	struct Plane;
 	//State machine
 public:
 
@@ -44,6 +45,29 @@ public:
 		};
 
 		Vector3() : x(0.0f), y(0.0f), z(0.0f) {}
+
+		static void getOrthogonalVectors(const Vector3& refVector, Vector3& u, Vector3& v) {
+			// Check if the reference vector is close to (0, 0, 1)
+			if (std::abs(refVector.x) < EPSILON && std::abs(refVector.y) < EPSILON && std::abs(refVector.z - 1.0f) < EPSILON) {
+				u = Vector3(1.0f, 0.0f, 0.0f);
+				v = Vector3(0.0f, 1.0f, 0.0f);
+				return;
+			}
+
+			// Check if the reference vector is close to (0, 0, -1)
+			if (std::abs(refVector.x) < EPSILON && std::abs(refVector.y) < EPSILON && std::abs(refVector.z + 1.0f) < EPSILON) {
+				u = Vector3(1.0f, 0.0f, 0.0f);
+				v = Vector3(0.0f, 1.0f, 0.0f);
+				return;
+			}
+
+			// Generate a vector orthogonal to the reference vector
+			u = Vector3(refVector.y, -refVector.x, 0.0f);
+			u.normalize();
+
+			// Generate another vector orthogonal to both the reference vector and u
+			v = Vector3::cross(refVector, u);
+		}
 
 		// Constructor for initializing Vector3 from individual x, y, and z values
 		Vector3(float xVal, float yVal, float zVal) : x(xVal), y(yVal), z(zVal) {}
@@ -193,6 +217,7 @@ public:
 			}
 			return result;
 		}
+		
 
 		Vector3 TransformDirection(const Vector3& direction) const {
 			float x = m[0][0] * direction.x + m[0][1] * direction.y + m[0][2] * direction.z;
@@ -255,37 +280,62 @@ public:
 				}
 			}
 		}
-
 		static int InverseAndTranspose(const Matrix& matrix, Matrix& result) {
 			float det = Determinant(matrix);
 			if (fabs(det) < 1e-10) {
-				return RT_FAILURE;
+				return RT_FAILURE; // Matrix is not invertible
 			}
 
 			Matrix adjoint;
 			Adjoint(matrix, adjoint);
-			Matrix invMatrix;
+
+			// Create the inverse matrix
+			Matrix inverse;
 			for (int i = 0; i < 4; i++) {
 				for (int j = 0; j < 4; j++) {
-					invMatrix.m[i][j] = adjoint.m[i][j] / det;
+					inverse.m[i][j] = adjoint.m[i][j] / det;
 				}
 			}
 
-			for (int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					result.m[i][j] = invMatrix.m[j][i];
-				}
-			}
-
-			// Ensure the rest of the matrix (the translation part) is also copied/transformed
-			for (int i = 0; i < 4; i++) {
-				result.m[3][i] = invMatrix.m[3][i]; // Copy the translation row
-				result.m[i][3] = invMatrix.m[i][3]; // Copy the translation column
-			}
-			result.m[3][3] = 1.0f; // Set the homogeneous coordinate to 1
+			// Now, perform the transpose on the inverse
+			result = inverse.transpose();
 
 			return RT_SUCCESS;
 		}
+
+		static int InverseTransposeForNormals(const Matrix& matrix, Matrix& result) {
+			float det = Determinant(matrix);
+			if (fabs(det) < 1e-10) {
+				return RT_FAILURE; // Matrix is not invertible
+			}
+
+			Matrix adjoint;
+			Adjoint(matrix, adjoint);
+
+			// Create the inverse matrix for the 3x3 part
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					result.m[i][j] = adjoint.m[i][j] / det;
+				}
+			}
+
+			// Now, perform the transpose on the 3x3 part of the inverse
+			for (int i = 0; i < 3; i++) {
+				for (int j = i + 1; j < 3; j++) {
+					std::swap(result.m[i][j], result.m[j][i]);
+				}
+			}
+
+			// Fill in the rest of the matrix to form a proper affine transformation matrix
+			for (int i = 0; i < 4; i++) {
+				result.m[i][3] = 0;
+				result.m[3][i] = 0;
+			}
+			result.m[3][3] = 1;
+
+			return RT_SUCCESS;
+		}
+
 
 		static int Inverse(const Matrix& matrix, Matrix& result) {
 			float det = Determinant(matrix);
@@ -387,11 +437,11 @@ public:
 		//Update default constructor
 		Material()
 			: surfaceColor(1.0, 1.0, 1.0), // default white color
-			Ka(0.1f), // ambient reflection coefficient
-			Kd(0.7f), // diffuse reflection coefficient
-			Ks(0.5f), // specular reflection coefficient
-			Kt(0.0f), // transparency coefficient
-			refractiveIndex(1.5), // refractive index, like glass
+			Ka(0.5f), // ambient reflection coefficient
+			Kd(0.75f), // diffuse reflection coefficient
+			Ks(0.95f), // specular reflection coefficient
+			Kt(0.95f), // transparency coefficient
+			refractiveIndex(2.5), // refractive index, like glass
 			specularExponet(32.0f), // specular highlight size
 			textureId("") {} // default no texture
 	};
@@ -407,15 +457,24 @@ public:
 		float radius;
 	};
 
+
+	struct Plane {
+		Vector3 position; // A point on the plane
+		Vector3 normal; // The normal vector of the plane
+		float distance; // The distance from the origin to the plane along its normal
+	};
+
 	struct Mesh {
 		enum Type {
 			RT_POLYGON,
-			RT_SPHERE
+			RT_SPHERE,
+			RT_PLANE
 		};
 
 		Mesh::Type type;
 		std::vector<Triangle> triangles;
 		Sphere sphere;
+		Plane plane;
 	};
 
 	struct RaycastHitInfo {
@@ -425,7 +484,8 @@ public:
 		float distance;
 		Triangle* triangle;
 		Sphere* sphere;
-		Material* material;
+		const Material* material;
+		Plane* plane;
 		float alpha;
 		float beta;
 		float gamma;
@@ -486,6 +546,7 @@ public:
 		std::unordered_map<std::string, Mesh*> meshMap;
 		std::vector<Light> lights;
 		Light directional;
+		std::vector<Plane> planes;
 	};
 
 	bool NearlyEquals(float a, float b);
@@ -494,7 +555,7 @@ public:
 	}
 	//Returns the pixel value to directly put in frame buffer
 	//Bounces affect how many times the rays recursively "bounce"
-	Pixel Raycast(Ray& ray, int bounces = 5);
+	Pixel Raycast(Ray& ray, int bounces = 22);
 
 
 	//Helper ray cast functions
@@ -507,7 +568,6 @@ public:
 	int FlushFrameBufferToPPM(std::string outputName);
 	Matrix ComputeModelMatrix(const Transformation& transform);
 	Pixel CalculateLocalColor(const RaycastHitInfo& hitInfo, const Light& light, const Material& material);
-	Pixel MixColors(const Raytracer::Pixel& color1, const Raytracer::Pixel& color2, float weight);
 	Vector3 CalculateRefraction(const Vector3& I, const Vector3& N, const float& indexM2);
 	Vector3 RandomUnitVector();
 	Vector3 RandomInHemisphere(const Raytracer::Vector3& normal);
@@ -519,6 +579,8 @@ public:
 	float Clipf(float input, int min, int max);
 	void GenerateRay(int x, int y, Ray& ray);
 	int Render(const std::string outputName);
+	bool IntersectPlane(const Ray& ray, const Plane& plane, const Material& material, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
+	Vector3 InterpolateNormalForPlane(const Plane& plane, const Vector3& hitPoint);
 	//Constructor
 	Raytracer(int width, int height);
 
@@ -528,7 +590,7 @@ private:
 	Display* mDisplay;
 
 	//Default colors
-	const Pixel BG_COLOR = Pixel(255, 255, 255);
+	const Pixel BG_COLOR = Pixel(254, 64, 205);
 	const Pixel SHADOW_COLOR = Pixel(0, 0, 0);
 
 	//Helper

@@ -8,7 +8,8 @@
 #define RT_FAILURE      1
 #define RT_INVALID_ARG  2
 #define PI 3.14159265
-#define EPSILON 0.0001
+#define EPSILON 1e-6
+#define SHADOW_CLIPPING_OFFSET 0.2
 
 const std::string ASSETS_PATH = "Assets/";
 
@@ -208,6 +209,10 @@ public:
 			return result;
 		}
 
+		Vector3 GetTranslation() const {
+			return Vector3(m[0][3], m[1][3], m[2][3]);
+		}
+
 		Matrix transpose() const {
 			Matrix result;
 			for (int i = 0; i < 4; ++i) {
@@ -217,7 +222,7 @@ public:
 			}
 			return result;
 		}
-		
+
 
 		Vector3 TransformDirection(const Vector3& direction) const {
 			float x = m[0][0] * direction.x + m[0][1] * direction.y + m[0][2] * direction.z;
@@ -230,6 +235,15 @@ public:
 			float x = m[0][0] * point.x + m[0][1] * point.y + m[0][2] * point.z + m[0][3];
 			float y = m[1][0] * point.x + m[1][1] * point.y + m[1][2] * point.z + m[1][3];
 			float z = m[2][0] * point.x + m[2][1] * point.y + m[2][2] * point.z + m[2][3];
+			float w = m[3][0] * point.x + m[3][1] * point.y + m[3][2] * point.z + m[3][3];
+
+			// Handle the perspective divide if w is not 1
+			if (w != 1.0f) {
+				x /= w;
+				y /= w;
+				z /= w;
+			}
+
 			return Vector3(x, y, z);
 		}
 
@@ -414,7 +428,9 @@ public:
 		Ray() {};
 		Vector3 origin; //World space
 		Vector3 direction; //Normalized
-		Ray(const Vector3& origin, const Vector3& direction) : origin(origin), direction(direction) {}
+		Ray(const Vector3& origin, const Vector3& direction) : origin(origin), direction(direction) {
+			this->direction.normalize();
+		}
 	};
 
 	struct Vertex {
@@ -453,7 +469,6 @@ public:
 	};
 
 	struct Sphere {
-		Vector3 position;
 		float radius;
 	};
 
@@ -555,7 +570,7 @@ public:
 	}
 	//Returns the pixel value to directly put in frame buffer
 	//Bounces affect how many times the rays recursively "bounce"
-	Pixel Raycast(Ray& ray, int bounces = 22);
+	Pixel Raycast(Ray& ray, int bounces = 4);
 
 
 	//Helper ray cast functions

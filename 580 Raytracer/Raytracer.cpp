@@ -60,10 +60,10 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 		//For point light we need to compute it since it stores position
 		else if (light.lightType == Light::Point) {
 			lightDir = (light.position - info.hitPoint);
-			lightDir.normalize();
 		}
+		lightDir.normalize();
 		//Make new ray from intersection point to light source
-		Ray lightRay(info.hitPoint, lightDir);
+		Ray lightRay(info.hitPoint + info.normal * SHADOW_CLIPPING_OFFSET, lightDir);
 		RaycastHitInfo lightInfo;
 
 		//For directional light, this value is not used as directional light doesn't have position property
@@ -193,7 +193,7 @@ Raytracer::Vector3 Raytracer::CalculateRefraction(const Vector3& I, const Vector
 		return Vector3(0, 0, 0);
 	}
 	else {
-		return I * eta  + n*(eta * cosi - sqrtf(k));
+		return I * eta + n * (eta * cosi - sqrtf(k));
 	}
 }
 
@@ -218,23 +218,23 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	//Assign normal to use for lighting based on mesh type
 	Vector3 _normal;
 	switch (hitInfo.type) {
-		case Mesh::RT_POLYGON: {
-			Vector3 triVertNormals[3] = { hitInfo.triangle->v0.vertexNormal, hitInfo.triangle->v1.vertexNormal , hitInfo.triangle->v2.vertexNormal };
-			//Interpolated normal
-			_normal = InterpolateVector3(triVertNormals, hitInfo.alpha, hitInfo.beta, hitInfo.gamma, true);
-			break;
-		}
-		case Mesh::RT_SPHERE: {
-			_normal = hitInfo.normal;
-			break;
-		}
-		case Mesh::RT_PLANE: {
-			//Interpolate hitNormal
-			_normal = InterpolateNormalForPlane(*hitInfo.plane, hitInfo.hitPoint);
-			break;
-		}
-
+	case Mesh::RT_POLYGON: {
+		Vector3 triVertNormals[3] = { hitInfo.triangle->v0.vertexNormal, hitInfo.triangle->v1.vertexNormal , hitInfo.triangle->v2.vertexNormal };
+		//Interpolated normal
+		_normal = InterpolateVector3(triVertNormals, hitInfo.alpha, hitInfo.beta, hitInfo.gamma, true);
+		break;
 	}
+	case Mesh::RT_SPHERE: {
+		_normal = hitInfo.normal;
+		break;
+	}
+	case Mesh::RT_PLANE: {
+		//Interpolate hitNormal
+		_normal = InterpolateNormalForPlane(*hitInfo.plane, hitInfo.hitPoint);
+		break;
+	}
+	}
+	_normal.normalize();
 
 	//Lighting = diffuse + specular
 	Vector3 lighting;
@@ -423,7 +423,7 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 	//Since P is a point on the plane, we can substitute it into Ax + By + Cz + D = 0, and we already know D from above
 	//We can calculate t, which is the distance from ray origin to intersection point
 	float t = -(Vector3::dot(planeNormal, localRayOrigin) + D) / planeNormalDotRayDir;
-	if (t < 0) {
+	if (t <= EPSILON) {
 		return false;  // Intersection is behind the ray
 	}
 
@@ -437,11 +437,11 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 	float beta = CalcTriangleAreaSigned(triangle.v0.vertexPos, localPointOnPlane, triangle.v2.vertexPos, planeNormal) / totalArea;
 	float gamma = CalcTriangleAreaSigned(triangle.v0.vertexPos, triangle.v1.vertexPos, localPointOnPlane, planeNormal) / totalArea;
 
-	if (alpha <= EPSILON || beta <= EPSILON || gamma <= EPSILON) return false;
+	if (alpha < 0 || beta < 0 || gamma < 0) return false;
 
 	//Write info only when pt is inside
 	//Transform hit point to world space
-	hitInfo.hitPoint = modelMatrix.TransformPoint(localPointOnPlane);
+	hitInfo.hitPoint = localPointOnPlane;
 
 	//Normal needs to use inverse transpose of the model matrix
 	Matrix inverseTransposeModel;
@@ -451,7 +451,7 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 	}
 
 	hitInfo.type = Mesh::RT_POLYGON;
-	hitInfo.normal = inverseTransposeModel.TransformDirection(planeNormal);
+	hitInfo.normal = planeNormal;
 	hitInfo.normal.normalize();
 	hitInfo.distance = t;
 	hitInfo.alpha = alpha;
@@ -469,52 +469,46 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 /// <param name="modelMatrix"></param>
 /// <returns></returns>
 bool Raytracer::IntersectSphere(const Ray& ray, const Sphere& sphere, RaycastHitInfo& hitInfo, const Matrix& modelMatrix) {
-	// Compute the inverse of the model matrix for transforming the ray
-	Matrix inverseModelMatrix;
-	Matrix::Inverse(modelMatrix, inverseModelMatrix);
-
-	// Transform the ray into the object's local space
-	Vector3 localRayOrigin = inverseModelMatrix.TransformPoint(ray.origin);
-	Vector3 localRayDirection = inverseModelMatrix.TransformDirection(ray.direction);  // Use TransformDirection
-	localRayDirection.normalize();
-
 	// In object space, the sphere is at its local origin, so we can simplify the intersection calculation
-	Vector3 oc = localRayOrigin;  // Sphere center is at local origin after transformation, so no need to subtract its position
-	float a = 1.0f;  // Since localRayDirection is normalized
-	float b = 2.0f * Vector3::dot(localRayDirection, oc);
+	Vector3 oc = ray.origin - modelMatrix.GetTranslation();  // Sphere center is at local origin after transformation, so no need to subtract its position
+	float b = 2.0f * Vector3::dot(ray.direction, oc);
 	float c = Vector3::dot(oc, oc) - (sphere.radius * sphere.radius);
 
 	// Calculate the discriminant for the quadratic equation
-	float discriminant = b * b - 4 * a * c;
-	if (discriminant < 0) return false;  // No intersection
+	float discriminant = (b * b) - (4 * 1.0f * c);
+	if (discriminant < EPSILON) return false;  // No intersection
 
 	float sqrtDiscriminant = sqrt(discriminant);
-	float t0 = (-b + sqrtDiscriminant) / (2 * a);
-	float t1 = (-b - sqrtDiscriminant) / (2 * a);
+	float t0 = (-b + sqrtDiscriminant) / (float)2;
+	float t1 = (-b - sqrtDiscriminant) / (float)2;
 
 	if (!GreaterThanZero(t0) && !GreaterThanZero(t1)) {
 		return false;  // Both intersections are behind the ray origin
 	}
 
 	// Find the nearest positive intersection
-	hitInfo.distance = (GreaterThanZero(t0) && (!GreaterThanZero(t1) || t0 < t1)) ? t0 : t1;
-
-	// Calculate hit point and normal in local space
-	Vector3 localHitPoint = localRayOrigin + localRayDirection * hitInfo.distance;
-	Vector3 localNormal = localHitPoint;  // The normal is the vector from the center to the hit point
-	localNormal.normalize();
-
-	// Transform the hit point and normal back to world space
-	hitInfo.hitPoint = modelMatrix.TransformPoint(localHitPoint);
-
-	// Use the InverseTranspose() function for normal transformation to handle non-uniform scaling
-	Matrix inverseTransposeMatrix;
-	if (RT_FAILURE == Matrix::InverseTransposeForNormals(modelMatrix, inverseTransposeMatrix)) {
-		std::cerr << "Failure during matrix inverse transpose calculation for normals.";
-		return false;
+	if (!GreaterThanZero(t0)) {
+		if (!GreaterThanZero(t1)) {
+			return false;
+		}
+		else {
+			hitInfo.distance = t1;
+		}
+	}
+	else {
+		if (!GreaterThanZero(t1)) {
+			hitInfo.distance = t0;
+		}
+		else {
+			hitInfo.distance = std::fmin(t0, t1);
+		}
 	}
 
-	hitInfo.normal = inverseTransposeMatrix.TransformDirection(localNormal);
+	// Transform the hit point and normal back to world space
+	hitInfo.hitPoint = ray.origin + (ray.direction * hitInfo.distance);
+
+	//Sphere.position is world space, thus transform hit point to world space then get direction from sphere position to it
+	hitInfo.normal = hitInfo.hitPoint - modelMatrix.GetTranslation();
 	hitInfo.normal.normalize();
 
 	hitInfo.type = Mesh::RT_SPHERE;
@@ -709,9 +703,7 @@ int Raytracer::LoadMesh(const std::string meshName) {
 			mesh->type = Mesh::RT_SPHERE;
 			Sphere sphere;
 
-			Vector3 center = { item["center"][0], item["center"][1], item["center"][2] };
 			float radius = item["radius"];
-			sphere.position = center;
 			sphere.radius = radius;
 			mesh->sphere = sphere;
 		}
@@ -1006,6 +998,7 @@ int Raytracer::InitializeRenderer() {
 	u.normalize();
 
 	Vector3 v = n.cross(u);
+	v.normalize();
 
 	Vector3 r = mScene->camera.from;
 	status |= CalculateViewMatrix(mScene->camera, u, v, n, r);
@@ -1044,7 +1037,7 @@ int main() {
 	//For recording duration stats
 
 	//Do ray tracing
-	Raytracer rt(500,500);
+	Raytracer rt(500, 500);
 	rt.LoadSceneJSON("simpleSphereScene.json");
 	rt.Render("output.ppm");
 

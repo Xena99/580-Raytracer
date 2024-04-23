@@ -31,7 +31,6 @@ class Raytracer {
 	struct Transformation;
 	struct Material;
 	struct Scene;
-	struct Plane;
 	//State machine
 public:
 
@@ -473,23 +472,15 @@ public:
 	};
 
 
-	struct Plane {
-		Vector3 position; // A point on the plane
-		Vector3 normal; // The normal vector of the plane
-		float distance; // The distance from the origin to the plane along its normal
-	};
-
 	struct Mesh {
 		enum Type {
 			RT_POLYGON,
 			RT_SPHERE,
-			RT_PLANE
 		};
 
 		Mesh::Type type;
 		std::vector<Triangle> triangles;
 		Sphere sphere;
-		Plane plane;
 	};
 
 	struct RaycastHitInfo {
@@ -500,7 +491,6 @@ public:
 		Triangle* triangle;
 		Sphere* sphere;
 		const Material* material;
-		Plane* plane;
 		float alpha;
 		float beta;
 		float gamma;
@@ -561,7 +551,6 @@ public:
 		std::unordered_map<std::string, Mesh*> meshMap;
 		std::vector<Light> lights;
 		Light directional;
-		std::vector<Plane> planes;
 	};
 
 	bool NearlyEquals(float a, float b);
@@ -594,8 +583,6 @@ public:
 	float Clipf(float input, int min, int max);
 	void GenerateRay(int x, int y, Ray& ray);
 	int Render(const std::string outputName);
-	bool IntersectPlane(const Ray& ray, const Plane& plane, const Material& material, RaycastHitInfo& hitInfo, const Matrix& modelMatrix);
-	Vector3 InterpolateNormalForPlane(const Plane& plane, const Vector3& hitPoint);
 	//Constructor
 	Raytracer(int width, int height);
 

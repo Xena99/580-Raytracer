@@ -39,14 +39,12 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 	for (Light& light : mScene->lights) {
 		//Calculate ambient light
 		if (light.lightType == Light::Ambient) {
-			Vector3 _ambientColor = light.color * material.Ka * light.intensity;
-			_ambientColor.x = Clipf(_ambientColor.x, 0, 1);
-			_ambientColor.y = Clipf(_ambientColor.y, 0, 1);
-			_ambientColor.z = Clipf(_ambientColor.z, 0, 1);
+			Vector3 _ambientColor = material.surfaceColor * material.Ka * light.color * light.intensity;
 
 			// Convert to Pixel format, conversion clamps for you
 			Pixel _ambientCol(_ambientColor);
-			//localColor = localColor + _ambientCol;
+			localColor = localColor + _ambientCol;
+			continue;
 		}
 
 		//Compute the direction to light (hit point to light)
@@ -63,7 +61,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 		}
 		lightDir.normalize();
 		//Make new ray from intersection point to light source
-		Ray lightRay(info.hitPoint + info.normal * SHADOW_CLIPPING_OFFSET, lightDir);
+		Ray lightRay(info.hitPoint + lightDir * SHADOW_CLIPPING_OFFSET, lightDir);
 		RaycastHitInfo lightInfo;
 
 		//For directional light, this value is not used as directional light doesn't have position property
@@ -75,7 +73,11 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 			// Calculate local color using Phong lighting or other shading model
 			localColor = localColor + CalculateLocalColor(info, light, material);
 		}
+		else {
+			localColor = localColor + SHADOW_COLOR;
+		}
 	}
+
 	//Clamp the color so far after light contributions are added
 	localColor.clamp();
 	//If we have bounces left, calculate reflection and refraction
@@ -90,7 +92,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 			// Calculate reflection ray
 			Vector3 reflectionRayDir = Vector3::reflect(ray.direction, info.normal);
 			reflectionRayDir.normalize();
-			Ray reflectionRay(info.hitPoint, reflectionRayDir);
+			Ray reflectionRay(info.hitPoint + reflectionRayDir * SHADOW_CLIPPING_OFFSET, reflectionRayDir);
 
 			// For each hit, if the material of the hit object is reflective, 
 			// you need to trace a new ray from the hit point in the reflection direction. 
@@ -102,7 +104,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 		// Add refraction
 		if (material.Kt > 0) {
 			Vector3 refractionRayDir = CalculateRefraction(ray.direction, info.normal, material.refractiveIndex);
-			Ray refractionRay(info.hitPoint, refractionRayDir);
+			Ray refractionRay(info.hitPoint + refractionRayDir * SHADOW_CLIPPING_OFFSET, refractionRayDir);
 			refractionColor = Raycast(refractionRay, bounces - 1);
 		}
 
@@ -212,7 +214,7 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 		lightVector.normalize(); // It's important to normalize the direction
 	}
 	else {
-		lightVector = light.direction; // For directional lights
+		lightVector = light.direction * -1; // For directional lights
 		lightVector.normalize();
 	}
 	//Assign normal to use for lighting based on mesh type
@@ -226,11 +228,6 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	}
 	case Mesh::RT_SPHERE: {
 		_normal = hitInfo.normal;
-		break;
-	}
-	case Mesh::RT_PLANE: {
-		//Interpolate hitNormal
-		_normal = InterpolateNormalForPlane(*hitInfo.plane, hitInfo.hitPoint);
 		break;
 	}
 	}
@@ -261,33 +258,10 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	color.y = Clipf(color.y, 0, 1);
 	color.z = Clipf(color.z, 0, 1);
 
-	Pixel finalColor;
-	// Convert to Pixel format and clamp values
-	finalColor.r = static_cast<short>(color.x * 255);
-	finalColor.g = static_cast<short>(color.y * 255);
-	finalColor.b = static_cast<short>(color.z * 255);
+	Pixel finalColor = Pixel(color);
 
 	return finalColor;
 }
-
-Raytracer::Vector3 Raytracer::InterpolateNormalForPlane(const Plane& plane, const Vector3& hitPoint) {
-	// Calculate the plane's basis vectors
-	Vector3 planeU, planeV;
-	Vector3::getOrthogonalVectors(plane.normal, planeU, planeV);
-
-	// Project the hit point onto the plane's basis vectors
-	float u = Vector3::dot(hitPoint - plane.position, planeU);
-	float v = Vector3::dot(hitPoint - plane.position, planeV);
-
-	// Interpolate the normal based on the hit point's position on the plane
-	Vector3 interpolatedNormal = plane.normal;
-
-	// Optionally, you can add additional logic here to modify the interpolatedNormal
-	// based on the hit point's position on the plane (u, v) if needed.
-
-	return interpolatedNormal;
-}
-
 
 Raytracer::Vector3 Raytracer::RandomUnitVector() {
 	std::uniform_real_distribution<float> distribution(0.0, 1.0);
@@ -338,47 +312,6 @@ Raytracer::Vector3 Raytracer::InterpolateVector3(const Vector3 vectors[], float 
 	return result;
 }
 
-bool Raytracer::IntersectPlane(const Ray& ray, const Plane& plane, const Material& material, RaycastHitInfo& hitInfo, const Matrix& modelMatrix) {
-	// Compute the inverse of the model matrix to transform the ray to the plane's local space
-	Matrix inverseModelMatrix;
-	if (Matrix::Inverse(modelMatrix, inverseModelMatrix) == RT_FAILURE) {
-		return false;  // Early exit if the inverse matrix calculation fails
-	}
-
-	// Transform the ray into the local space of the object
-	Vector3 localRayOrigin = inverseModelMatrix.TransformPoint(ray.origin);
-	Vector3 localRayDirection = inverseModelMatrix.TransformDirection(ray.direction);
-	localRayDirection.normalize();
-
-	// Calculate the intersection with the plane in local space
-	float denom = Vector3::dot(plane.normal, localRayDirection);
-	if (std::abs(denom) > EPSILON) {  // Ensure the ray is not parallel to the plane
-		// Calculate t, the distance along the ray to the intersection point
-		float t = -(Vector3::dot(plane.normal, localRayOrigin) + plane.distance) / denom;
-		if (t >= 0) {  // Intersection must be along the positive direction of the ray
-			hitInfo.hitPoint = localRayOrigin + localRayDirection * t;  // Calculate local space intersection point
-			hitInfo.distance = t;
-			hitInfo.material = &material;
-
-			// Compute the normal direction in world space
-			// Using inverse transpose to ensure non-uniform scaling is accounted for
-			Matrix inverseTransposeModel;
-			if (Matrix::InverseTransposeForNormals(modelMatrix, inverseTransposeModel) == RT_FAILURE) {
-				return false;
-			}
-			Vector3 transformedNormal = inverseTransposeModel.TransformDirection(plane.normal);
-			if (Vector3::dot(transformedNormal, ray.direction) > 0) {
-				transformedNormal = -transformedNormal;  // Invert normal if it points towards the ray
-			}
-			hitInfo.normal = transformedNormal;
-			hitInfo.normal.normalize();
-			return true;  // Intersection found
-		}
-	}
-	return false;  // No intersection
-}
-
-
 /// <summary>
 /// Möller–Trumbore intersection algorithm, given a ray and triangle, test intersection
 /// If successful intersection, outputs world space hit point and hit normal
@@ -392,22 +325,21 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 	Matrix inverseModelMatrix;
 	Matrix::Inverse(modelMatrix, inverseModelMatrix);
 
-	// Transform the ray into the object's local space
-	Vector3 localRayOrigin = inverseModelMatrix.TransformPoint(ray.origin);
-	Vector3 localRayDirection = inverseModelMatrix.TransformDirection(ray.direction);  // Use TransformDirection
-	localRayDirection.normalize();
+	Vector3 _v0 = modelMatrix.TransformPoint(triangle.v0.vertexPos);
+	Vector3 _v1 = modelMatrix.TransformPoint(triangle.v1.vertexPos);
+	Vector3 _v2 = modelMatrix.TransformPoint(triangle.v2.vertexPos);
 
 	//Image a plane where the triangle lies on, the ray will intersect with the plane if the plane is in front of the ray
 	//Once intersection happens with the plane, we can then figure out if the intersection point is inside the triangle
 	//Even if a plane is in front of the ray, the ray will miss it if it's parallel to the ray
 
 	//Get plane normal, which will be the same for the triangle normal since triangle lies flat on the imaginary plane
-	Vector3 _edge1 = triangle.v1.vertexPos - triangle.v0.vertexPos;
-	Vector3 _edge2 = triangle.v2.vertexPos - triangle.v0.vertexPos;
+	Vector3 _edge1 = _v1 - _v0;
+	Vector3 _edge2 = _v2 - _v0;
 	Vector3 planeNormal = Vector3::cross(_edge1, _edge2);
 	planeNormal.normalize();
 
-	float planeNormalDotRayDir = Vector3::dot(planeNormal, localRayDirection);
+	float planeNormalDotRayDir = Vector3::dot(planeNormal, ray.direction);
 
 	//Dot product of two vectors is 0 means they are perpendicular to each other, 0, and 1 are pointing along same dir or opposite
 	//Perpendicular with the normal means no intersection and you have to go along the normal to point to the plane
@@ -417,37 +349,29 @@ bool Raytracer::IntersectTriangle(const Ray& ray, const Triangle& triangle, Rayc
 
 	//Ax + By + Cz + D = 0 for plane, where A B C is the normal to plane N = (A, B, C), x y z is any point on the plane
 	//We can use any vertex x y z to substitute 
-	float D = -Vector3::dot(planeNormal, triangle.v0.vertexPos);
+	float D = -Vector3::dot(planeNormal, _v0);
 
 	//Since P is a point on the plane, we can substitute it into Ax + By + Cz + D = 0, and we already know D from above
 	//We can calculate t, which is the distance from ray origin to intersection point
-	float t = -(Vector3::dot(planeNormal, localRayOrigin) + D) / planeNormalDotRayDir;
+	float t = -(Vector3::dot(planeNormal, ray.origin) + D) / planeNormalDotRayDir;
 	if (t <= EPSILON) {
 		return false;  // Intersection is behind the ray
 	}
 
 	//P = RayOrigin + t * RayDirection -> point on plane
-	Vector3 localPointOnPlane = localRayOrigin + localRayDirection * t;
+	Vector3 pointOnPlane = ray.origin + ray.direction * t;
 
-	float totalArea = CalcTriangleAreaSigned(triangle.v0.vertexPos, triangle.v1.vertexPos, triangle.v2.vertexPos, planeNormal);
+	float totalArea = CalcTriangleAreaSigned(_v0, _v1, _v2, planeNormal);
 
 	// Calculate the areas for the barycentric coordinates
-	float alpha = CalcTriangleAreaSigned(localPointOnPlane, triangle.v1.vertexPos, triangle.v2.vertexPos, planeNormal) / totalArea;
-	float beta = CalcTriangleAreaSigned(triangle.v0.vertexPos, localPointOnPlane, triangle.v2.vertexPos, planeNormal) / totalArea;
-	float gamma = CalcTriangleAreaSigned(triangle.v0.vertexPos, triangle.v1.vertexPos, localPointOnPlane, planeNormal) / totalArea;
+	float alpha = CalcTriangleAreaSigned(pointOnPlane, _v1, _v2, planeNormal) / totalArea;
+	float beta = CalcTriangleAreaSigned(_v0, pointOnPlane, _v2, planeNormal) / totalArea;
+	float gamma = CalcTriangleAreaSigned(_v0, _v1, pointOnPlane, planeNormal) / totalArea;
 
 	if (alpha < 0 || beta < 0 || gamma < 0) return false;
 
 	//Write info only when pt is inside
-	//Transform hit point to world space
-	hitInfo.hitPoint = localPointOnPlane;
-
-	//Normal needs to use inverse transpose of the model matrix
-	Matrix inverseTransposeModel;
-	if (RT_FAILURE == Matrix::InverseTransposeForNormals(modelMatrix, inverseTransposeModel)) {
-		std::cerr << "Failure during matrix inverse transpose calculation for normals.";
-		return false;
-	}
+	hitInfo.hitPoint = pointOnPlane;
 
 	hitInfo.type = Mesh::RT_POLYGON;
 	hitInfo.normal = planeNormal;
@@ -569,25 +493,6 @@ bool Raytracer::IntersectScene(const Ray& ray, RaycastHitInfo& hitInfo) {
 				}
 			}
 		}
-		else if (mesh->type == Mesh::RT_PLANE) {
-			RaycastHitInfo tempInfo;
-			if (IntersectPlane(ray, mesh->plane, m.material, tempInfo, modelMatrix)) {
-				if (!hasFoundHit) {
-					hasFoundHit = true;
-					closestHit = tempInfo;
-					closestHit.plane = &mesh->plane;
-					closestHit.material = &m.material;
-				}
-				else {
-					if (tempInfo.distance < closestHit.distance) {
-						closestHit = tempInfo;
-						closestHit.plane = &mesh->plane;
-						closestHit.material = &m.material;
-					}
-				}
-			}
-		}
-
 	}
 
 	if (!hasFoundHit) return false;
@@ -706,16 +611,6 @@ int Raytracer::LoadMesh(const std::string meshName) {
 			sphere.radius = radius;
 			mesh->sphere = sphere;
 		}
-		else if (shapeType == "plane") {
-			mesh->type = Mesh::RT_PLANE;
-			Plane plane;
-
-			plane.normal.x = item["normal"][0];
-			plane.normal.y = item["normal"][1];
-			plane.normal.z = item["normal"][2];
-			plane.distance = item["distance"];
-			mesh->plane = plane;
-		}
 	}
 
 	mScene->meshMap[meshName] = mesh;
@@ -794,21 +689,9 @@ int Raytracer::LoadSceneJSON(const std::string scenePath) {
 						shape.transforms.translation.z = T[2].get<float>();
 					}
 				}
-				if (shape.geometryId == "plane") {
-					// Load plane mesh
-					Plane plane;
-					const auto& planeData = shapeValue["geometry"];
-					plane.normal.x = planeData["normal"][0];
-					plane.normal.y = planeData["normal"][1];
-					plane.normal.z = planeData["normal"][2];
-					plane.distance = planeData["distance"];
-					mScene->planes.push_back(plane);
-				}
-				else {
-					mScene->shapes.push_back(shape);
-					//Auto load into mesh map
-					status |= LoadMesh(shape.geometryId);
-				}
+				mScene->shapes.push_back(shape);
+				//Auto load into mesh map
+				status |= LoadMesh(shape.geometryId);
 			}
 		}
 

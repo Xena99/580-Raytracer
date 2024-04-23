@@ -46,7 +46,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 
 			// Convert to Pixel format, conversion clamps for you
 			Pixel _ambientCol(_ambientColor);
-			localColor = localColor + _ambientCol;
+			//localColor = localColor + _ambientCol;
 		}
 
 		//Compute the direction to light (hit point to light)
@@ -78,6 +78,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 	}
 	//Clamp the color so far after light contributions are added
 	localColor.clamp();
+	return localColor;
 	//If we have bounces left, calculate reflection and refraction
 	if (bounces > 0) {
 		float _kt;
@@ -212,7 +213,7 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 		lightVector.normalize(); // It's important to normalize the direction
 	}
 	else {
-		lightVector = light.direction * -1; // For directional lights
+		lightVector = light.direction; // For directional lights
 		lightVector.normalize();
 	}
 	//Assign normal to use for lighting based on mesh type
@@ -252,9 +253,8 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 	float specularStrength = fmax(Vector3::dot(viewVector, reflection), 0);
 	specularStrength = std::powf(specularStrength, material.specularExponet);
 	Vector3 _specular = light.color * specularStrength * light.intensity;
-	Vector3 ambient = material.surfaceColor * light.color * material.Ka * light.intensity;
 
-	lighting = ambient + _diffuse * material.Kd + _specular * material.Ks;
+	lighting = _diffuse * material.Kd + _specular * material.Ks;
 
 	Vector3 color = material.surfaceColor * lighting;
 

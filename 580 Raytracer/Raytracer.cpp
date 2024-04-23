@@ -78,7 +78,6 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 	}
 	//Clamp the color so far after light contributions are added
 	localColor.clamp();
-	return localColor;
 	//If we have bounces left, calculate reflection and refraction
 	if (bounces > 0) {
 		float _kt;

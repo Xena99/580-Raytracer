@@ -3,6 +3,7 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <random>
 //Defines
 #define RT_SUCCESS      0
 #define RT_FAILURE      1
@@ -588,6 +589,7 @@ public:
 
 
 private:
+	std::default_random_engine mGenerator;
 	Scene* mScene = nullptr;
 	Display* mDisplay;
 

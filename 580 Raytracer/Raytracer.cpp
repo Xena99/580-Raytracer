@@ -3,7 +3,7 @@
 #include "ExternalPlugins/json.hpp"
 #include "ExternalPlugins/CImg/CImg.h"
 #include <fstream>
-#include <random>
+
 
 //For timing render duration
 #include <chrono> 
@@ -43,7 +43,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 
 			//is this where we multiply ao by the color?
 			_ambientColor = _ambientColor * CalculateAmbientOcclusion(info.hitPoint, info.normal);
-			
+
 			// Convert to Pixel format, conversion clamps for you
 			Pixel _ambientCol(_ambientColor);
 			localColor = localColor + _ambientCol;
@@ -267,17 +267,22 @@ Raytracer::Pixel Raytracer::CalculateLocalColor(const RaycastHitInfo& hitInfo, c
 }
 
 Raytracer::Vector3 Raytracer::RandomUnitVector() {
-	std::uniform_real_distribution<float> distribution(0.0, 1.0);
-	std::default_random_engine generator;
-	Raytracer::Vector3 p;
-	do {
-		p = Raytracer::Vector3(distribution(generator), distribution(generator), distribution(generator)) * 2.0f - Raytracer::Vector3(1, 1, 1);
-	} while (p.length_squared() >= 1.0f);
-	return p;
+	std::uniform_real_distribution<float> angleDist(0.0, 2 * PI);
+	std::uniform_real_distribution<float> zDist(-1.0, 1.0);
+
+	float z = zDist(mGenerator);
+	float a = angleDist(mGenerator);
+	float r = sqrt(1 - z * z);
+
+	float x = r * cos(a);
+	float y = r * sin(a);
+
+	return Vector3(x, y, z);
 }
 
 Raytracer::Vector3 Raytracer::RandomInHemisphere(const Raytracer::Vector3& normal) {
 	Raytracer::Vector3 in_unit_sphere = RandomUnitVector(); // Function to create a random unit vector
+	in_unit_sphere.normalize();
 	if (in_unit_sphere.dot(normal) > 0.0) { // In the same hemisphere as the normal
 		return in_unit_sphere;
 	}
@@ -314,15 +319,14 @@ float Raytracer::CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, c
 
 	for (int i = 0; i < numSamples; i++) {
 		Raytracer::Vector3 randomDir = RandomInHemisphere(normal);
-		Ray occlusionRay(hitPoint+randomDir*SHADOW_CLIPPING_OFFSET, randomDir);
+		Ray occlusionRay(hitPoint + randomDir * SHADOW_CLIPPING_OFFSET, randomDir);
 		RaycastHitInfo occlusionInfo;
-		
-		if (IntersectScene(occlusionRay,occlusionInfo)) {
+
+		if (IntersectScene(occlusionRay, occlusionInfo)) {
 			occlusion += 1.0f;
 		}
 	}
-	std::cout << ((float)occlusion / (float)numSamples);
-	return 1.0f-((float)occlusion / (float)numSamples);
+	return 1.0f - ((float)occlusion / (float)numSamples);
 }
 
 
@@ -780,6 +784,7 @@ Raytracer::Raytracer(int width, int height) {
 	mDisplay->yRes = height;
 	mDisplay->frameBuffer = new Pixel[width * height];
 	mDisplay->fov = 60.0f;
+	std::default_random_engine mGenerator(std::random_device{}()); // Using random_device to seed the generator
 }
 
 
@@ -941,7 +946,7 @@ int main() {
 
 	//Do ray tracing
 	Raytracer rt(500, 500);
-	rt.LoadSceneJSON("simpleSphereSceneAO.json");
+	rt.LoadSceneJSON("simpleSphereScene.json");
 	rt.Render("output.ppm");
 
 	return 0;

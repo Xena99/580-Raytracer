@@ -41,6 +41,9 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 		if (light.lightType == Light::Ambient) {
 			Vector3 _ambientColor = material.surfaceColor * material.Ka * light.color * light.intensity;
 
+			//is this where we multiply ao by the color?
+			_ambientColor = _ambientColor * CalculateAmbientOcclusion(info.hitPoint, info.normal);
+			
 			// Convert to Pixel format, conversion clamps for you
 			Pixel _ambientCol(_ambientColor);
 			localColor = localColor + _ambientCol;
@@ -119,7 +122,7 @@ Raytracer::Pixel Raytracer::Raycast(Ray& ray, int bounces) {
 
 		// Combine the colors with their respective factors.
 		localColor = (localColor * albedoColorFactor) + (finalReflectionColor * material.Ks) + (finalRefractionColor * material.Kt);
-
+		//localColor = localColor * CalculateAmbientOcclusion(info.hitPoint, info.normal);
 	}
 
 	return localColor.clamp();
@@ -283,25 +286,43 @@ Raytracer::Vector3 Raytracer::RandomInHemisphere(const Raytracer::Vector3& norma
 	}
 }
 
+//float Raytracer::CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, const Raytracer::Vector3& normal) {
+//	int numSamples = 16; // Number of samples to check for occlusion
+//	float occlusionRadius = 0.5f; // Max distance to check for occlusion
+//	int occludedCount = 0;
+//
+//	for (int i = 0; i < numSamples; ++i) {
+//		Raytracer::Vector3 randomDir = RandomInHemisphere(normal);
+//		Ray occlusionRay(hitPoint, randomDir);
+//		RaycastHitInfo occlusionInfo;
+//
+//		if (IntersectScene(occlusionRay, occlusionInfo)) {
+//			if (occlusionInfo.distance < occlusionRadius) {
+//				occludedCount++;
+//			}
+//		}
+//	}
+//
+//	// Return the proportion of the hemisphere that is NOT occluded
+//	return 1.0f - (float)occludedCount / (float)numSamples;
+//}
+
 float Raytracer::CalculateAmbientOcclusion(const Raytracer::Vector3& hitPoint, const Raytracer::Vector3& normal) {
-	int numSamples = 16; // Number of samples to check for occlusion
-	float occlusionRadius = 0.5f; // Max distance to check for occlusion
-	int occludedCount = 0;
+	// Pseudocode for calculating ambient occlusion
+	int numSamples = 128; // Number of samples to check for occlusion
+	float occlusion = 0.0;
 
-	for (int i = 0; i < numSamples; ++i) {
+	for (int i = 0; i < numSamples; i++) {
 		Raytracer::Vector3 randomDir = RandomInHemisphere(normal);
-		Ray occlusionRay(hitPoint, randomDir);
+		Ray occlusionRay(hitPoint+randomDir*SHADOW_CLIPPING_OFFSET, randomDir);
 		RaycastHitInfo occlusionInfo;
-
-		if (IntersectScene(occlusionRay, occlusionInfo)) {
-			if (occlusionInfo.distance < occlusionRadius) {
-				occludedCount++;
-			}
+		
+		if (IntersectScene(occlusionRay,occlusionInfo)) {
+			occlusion += 1.0f;
 		}
 	}
-
-	// Return the proportion of the hemisphere that is NOT occluded
-	return 1.0f - (float)occludedCount / (float)numSamples;
+	std::cout << ((float)occlusion / (float)numSamples);
+	return 1.0f-((float)occlusion / (float)numSamples);
 }
 
 
@@ -920,7 +941,7 @@ int main() {
 
 	//Do ray tracing
 	Raytracer rt(500, 500);
-	rt.LoadSceneJSON("simpleSphereScene.json");
+	rt.LoadSceneJSON("simpleSphereSceneAO.json");
 	rt.Render("output.ppm");
 
 	return 0;

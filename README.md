@@ -26,18 +26,6 @@ The **580 Raytracer** is a CPU-based ray tracing renderer implemented in C++. It
 git clone https://github.com/Xena99/580-Raytracer.git
 cd 580-Raytracer
 ```
-
-### Compilation
-Use a C++ compiler supporting C++11 or later. Example compilation using `g++`:
-```sh
-g++ -std=c++11 -o raytracer Raytracer.cpp -I ExternalPlugins/CImg -I ExternalPlugins/json.hpp
-```
-
-### Running the Raytracer
-Execute the compiled program:
-```sh
-./raytracer
-```
 By default, the program loads `simpleSphereScene.json` and renders `output.ppm`.
 
 ## Code Structure
